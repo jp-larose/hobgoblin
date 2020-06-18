@@ -1,4 +1,5 @@
-Hobgoblin is a fork of [Goblin](https://github.com/davebshow/goblin)
+Hobgoblin is a fork of [Goblin](https://github.com/davebshow/goblin).
+
 Until I get anything significant to update I'm leaving the text from the original README.md below.
 
 
