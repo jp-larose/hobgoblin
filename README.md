@@ -1,3 +1,7 @@
+Hobgoblin is a fork of [Goblin](https://github.com/davebshow/goblin)
+Until I get anything significant to update I'm leaving the text from the original README.md below.
+
+
 # Goblin OGM for the [TinkerPop 3](http://tinkerpop.apache.org/) [Gremlin Server](http://tinkerpop.apache.org/docs/current/reference/#gremlin-server)
 [![Build Status](https://travis-ci.org/davebshow/goblin.svg?branch=master)](https://travis-ci.org/davebshow/goblin) [![Coverage Status](https://coveralls.io/repos/github/davebshow/goblin/badge.svg?branch=master)](https://coveralls.io/github/davebshow/goblin?branch=master) [![Gitter chat](https://badges.gitter.im/davebshow/goblin.svg)](https://gitter.im/davebshow/goblin?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge) [![Documentation Status](https://readthedocs.org/projects/goblin/badge/?version=latest)](http://goblin.readthedocs.io/en/latest/?badge=latest)
 
