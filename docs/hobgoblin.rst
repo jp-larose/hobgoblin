@@ -1,4 +1,4 @@
-goblin package
+hobgoblin package
 ==============
 
 Subpackages
@@ -6,71 +6,71 @@ Subpackages
 
 .. toctree::
 
-    goblin.driver
+    hobgoblin.driver
 
 Submodules
 ----------
 
-goblin.abc module
+hobgoblin.abc module
 -----------------
 
-.. automodule:: goblin.abc
+.. automodule:: hobgoblin.abc
     :members:
     :undoc-members:
     :show-inheritance:
 
-goblin.app module
+hobgoblin.app module
 -----------------
 
-.. automodule:: goblin.app
+.. automodule:: hobgoblin.app
     :members:
     :undoc-members:
     :show-inheritance:
 
-goblin.element module
+hobgoblin.element module
 ---------------------
 
-.. automodule:: goblin.element
+.. automodule:: hobgoblin.element
     :members:
     :undoc-members:
     :show-inheritance:
 
-goblin.exception module
+hobgoblin.exception module
 -----------------------
 
-.. automodule:: goblin.exception
+.. automodule:: hobgoblin.exception
     :members:
     :undoc-members:
     :show-inheritance:
 
-goblin.manager module
+hobgoblin.manager module
 ---------------------
 
-.. automodule:: goblin.manager
+.. automodule:: hobgoblin.manager
     :members:
     :undoc-members:
     :show-inheritance:
 
-goblin.mapper module
+hobgoblin.mapper module
 --------------------
 
-.. automodule:: goblin.mapper
+.. automodule:: hobgoblin.mapper
     :members:
     :undoc-members:
     :show-inheritance:
 
-goblin.properties module
+hobgoblin.properties module
 ------------------------
 
-.. automodule:: goblin.properties
+.. automodule:: hobgoblin.properties
     :members:
     :undoc-members:
     :show-inheritance:
 
-goblin.session module
+hobgoblin.session module
 ---------------------
 
-.. automodule:: goblin.session
+.. automodule:: hobgoblin.session
     :members:
     :undoc-members:
     :show-inheritance:
@@ -78,7 +78,7 @@ goblin.session module
 Module contents
 ---------------
 
-.. automodule:: goblin
+.. automodule:: hobgoblin
     :members:
     :undoc-members:
     :show-inheritance:

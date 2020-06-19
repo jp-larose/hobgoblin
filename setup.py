@@ -43,17 +43,17 @@ packages = find_packages()
 
 # Get the version string. Cannot be done with import!
 g = {}
-with open(os.path.join('goblin', 'version.py'), 'rt') as fp:
+with open(os.path.join('hobgoblin', 'version.py'), 'rt') as fp:
     exec(fp.read(), g)
     version = g['__version__']
 
 setup(
-    name='goblin',
+    name='hobgoblin',
     version=version,
-    url='https://github.com/davebshow/goblin',
+    url='https://github.com/jp-larose/hobgoblin',
     license='Apache License 2.0',
-    author='davebshow',
-    author_email='davebshow@gmail.com',
+    author='Joël Larose',
+    author_email='joel.larose@gmail.com',
     description=__doc__,
     packages=packages,
     install_requires=install_requires,

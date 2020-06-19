@@ -3,8 +3,8 @@
 import pytest
 from gremlin_python.process.traversal import Binding
 
-from goblin import element
-from goblin.session import bindprop
+from hobgoblin import element
+from hobgoblin.session import bindprop
 
 
 def test_bindprop(person_class):
@@ -362,7 +362,7 @@ class TestTraversalApi:
 
     @pytest.mark.asyncio
     async def test_property_deserialization(self, app):
-        # In a future version this should deserialize to a Goblin vert prop???
+        # In a future version this should deserialize to a Hobgoblin vert prop???
         session = await app.session()
         p1 = await session.g.addV('person').property('name', 'leif').next()
         traversal = session.g.V(Binding('p1_id', p1.id)).properties('name')

@@ -3,10 +3,10 @@ import asyncio
 import pytest
 from gremlin_python.process.traversal import Cardinality
 
-from goblin import Goblin, driver, element, properties
-from goblin.driver import (
+from hobgoblin import Hobgoblin, driver, element, properties
+from hobgoblin.driver import (
     Connection, DriverRemoteConnection, GraphSONMessageSerializer)
-from goblin.provider import TinkerGraph
+from hobgoblin.provider import TinkerGraph
 
 
 def pytest_generate_tests(metafunc):
@@ -192,7 +192,7 @@ def remote_graph():
 @pytest.fixture
 def app(gremlin_host, gremlin_port, event_loop, provider, aliases):
     app = event_loop.run_until_complete(
-        Goblin.open(
+        Hobgoblin.open(
             event_loop,
             provider=provider,
             aliases=aliases,
@@ -345,7 +345,7 @@ def add_doctest_default(doctest_namespace, tmpdir, event_loop, app):
         "min_conns: 1\n"
         "max_times_acquired: 16\n"
         "max_inflight: 64\n"
-        "message_serializer: 'goblin.driver.GraphSONMessageSerializer'\n"
+        "message_serializer: 'hobgoblin.driver.GraphSONMessageSerializer'\n"
     )
     with tmpdir.as_cwd():
         yield

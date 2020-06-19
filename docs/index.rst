@@ -1,15 +1,15 @@
-.. goblin documentation master file, created by
+.. hobgoblin documentation master file, created by
    sphinx-quickstart on Sat Jul 16 14:01:32 2016.
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-Goblin - Async Python toolkit for the TinkerPop 3 Gremlin Server
+Hobgoblin - Async Python toolkit for the TinkerPop 3 Gremlin Server
 ================================================================
 
-:py:mod:`Goblin<goblin>` is an asynchronous Python toolkit for the `TinkerPop 3`_
+:py:mod:`Hobgoblin<hobgoblin>` is an asynchronous Python toolkit for the `TinkerPop 3`_
 `Gremlin Server`_. In order to leverage Python's support for asynchronous
-programming paradigms, :py:mod:`Goblin<goblin>` is implemented using the async/await
-syntax introduced in Python 3.5, and does not support earlier Python versions. Goblin
+programming paradigms, :py:mod:`Hobgoblin<hobgoblin>` is implemented using the async/await
+syntax introduced in Python 3.5, and does not support earlier Python versions. Hobgoblin
 is built on top of `aiogremlin`_ and provides full compatibility with the `aiogremlin`_
 GLV and driver.
 
@@ -28,7 +28,7 @@ GLV and driver.
 
 Releases
 ========
-The latest release of :py:mod:`goblin` is **2.0.0**.
+The latest release of :py:mod:`hobgoblin` is **2.0.0**.
 
 
 Requirements
@@ -47,7 +47,7 @@ Installation
 ============
 Install using pip::
 
-    $ pip install goblin
+    $ pip install hobgoblin
 
 
 The Basics
@@ -55,11 +55,11 @@ The Basics
 
 **OGM**
 
-Define custom vertex/edge classes using the provided base :py:mod:`classes<goblin.element>`,
-:py:class:`properties<goblin.properties.Property>`, and
-:py:mod:`data types<goblin.properties>`::
+Define custom vertex/edge classes using the provided base :py:mod:`classes<hobgoblin.element>`,
+:py:class:`properties<hobgoblin.properties.Property>`, and
+:py:mod:`data types<hobgoblin.properties>`::
 
-    >>> from goblin import element, properties
+    >>> from hobgoblin import element, properties
 
 
     >>> class Person(element.Vertex):
@@ -71,19 +71,19 @@ Define custom vertex/edge classes using the provided base :py:mod:`classes<gobli
     ...     notes = properties.Property(properties.String, default='N/A')
 
 
-Create a :py:class:`Goblin App<goblin.app.Goblin>` and register the element classes::
+Create a :py:class:`Hobgoblin App<hobgoblin.app.Hobgoblin>` and register the element classes::
 
     >>> import asyncio
-    >>> from goblin import Goblin
+    >>> from hobgoblin import Hobgoblin
 
     >>> loop = asyncio.get_event_loop()
     >>> app = loop.run_until_complete(
-    ...     Goblin.open(loop))
+    ...     Hobgoblin.open(loop))
     >>> app.register(Person, Knows)
 
 
 Other than user defined properties, elements provide no interface. Use a
-:py:class:`Session<goblin.session.Session>` object to interact with the
+:py:class:`Session<hobgoblin.session.Session>` object to interact with the
 database::
 
     >>> async def go(app):
@@ -106,7 +106,7 @@ database::
     <__main__.Person object at ...>
     ...
 
-Note that a :py:mod:`Goblin session<goblin.session>` does not necessarily
+Note that a :py:mod:`Hobgoblin session<hobgoblin.session>` does not necessarily
 correspond to a Gremlin Server session. Instead, all elements created using
 a session are 'live' in the sense that if the results of a traversal executed
 against the session result in different property values for an element, that
@@ -118,8 +118,8 @@ For more information on using the OGM, see the :doc:`OGM docs</ogm>`
 
 Generate and submit Gremlin traversals in native Python::
 
-    >>> from goblin import DriverRemoteConnection  # alias for aiogremlin.DriverRemoteConnection
-    >>> from goblin import Graph  # alias for aiogremlin.Graph
+    >>> from hobgoblin import DriverRemoteConnection  # alias for aiogremlin.DriverRemoteConnection
+    >>> from hobgoblin import Graph  # alias for aiogremlin.Graph
 
     >>> async def go(loop):
     ...    remote_connection = await DriverRemoteConnection.open(
@@ -147,7 +147,7 @@ see the `aiogremlin`_ documentation or the :doc:`GLV docs</glv>`
 Submit scripts and bindings to the `Gremlin Server`_::
 
     >>> import asyncio
-    >>> from goblin import Cluster  # alias for aiogremlin.Cluster
+    >>> from hobgoblin import Cluster  # alias for aiogremlin.Cluster
 
     >>> loop = asyncio.get_event_loop()
 
@@ -192,6 +192,6 @@ Indices and tables
 .. _Gremlin Server: http://tinkerpop.apache.org/docs/3.1.1-incubating/reference/#gremlin-server
 .. _`Asyncio`: https://docs.python.org/3/library/asyncio.html
 .. _`aiohttp`: http://aiohttp.readthedocs.org/en/stable/
-.. _Github: https://github.com/davebshow/goblin/issues
+.. _Github: https://github.com/davebshow/hobgoblin/issues
 .. _PEP 492: https://www.python.org/dev/peps/pep-0492/
 .. _aiogremlin: http://aiogremlin.readthedocs.io/en/latest/

@@ -1,4 +1,4 @@
-from goblin import element
+from hobgoblin import element
 
 
 class TestRegisterVertex1(element.Vertex):

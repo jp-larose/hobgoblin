@@ -1,7 +1,7 @@
 import pytest
 
-import goblin
-from goblin import element
+import hobgoblin
+from hobgoblin import element
 
 
 @pytest.mark.asyncio

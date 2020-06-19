@@ -2,8 +2,8 @@
 # import uuid
 # import pytest
 #
-# from goblin import exception
-# from goblin.driver import GraphSONMessageSerializer
+# from hobgoblin import exception
+# from hobgoblin.driver import GraphSONMessageSerializer
 #
 #
 # @pytest.mark.asyncio
