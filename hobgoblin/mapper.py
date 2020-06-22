@@ -1,9 +1,11 @@
 """Helper functions and class to map between OGM Elements <-> DB Elements"""
 
+from typing import Any, Dict
 import functools
 import logging
 
 from hobgoblin import exception
+from gremlin_python.process.traversal import T
 
 logger = logging.getLogger(__name__)
 
@@ -88,11 +90,11 @@ def map_vertex_to_ogm(result, props, element, *, mapping=None):
 
 
 # temp hack
-def get_hashable_id(val):
+def get_hashable_id(val: Dict[str, Any]) -> Any:
     # Use the value "as-is" by default.
     if isinstance(val, dict) and "@type" in val and "@value" in val:
         if val["@type"] == "janusgraph:RelationIdentifier":
-            val = val["@value"]["value"]
+            val = val["@value"].get("value", val["@value"]["relationId"])
     return val
 
 
@@ -125,8 +127,8 @@ def map_vertex_property_to_ogm(result, element, *, mapping=None):
 
 def map_edge_to_ogm(result, props, element, *, mapping=None):
     """Map an edge returned by DB to OGM edge"""
-    props.pop('id')
-    label = props.pop('label')
+    props.pop(T.id)
+    label = props.pop(T.label)
     for db_name, value in props.items():
         name, data_type = mapping.db_properties.get(db_name, (db_name, None))
         if data_type:

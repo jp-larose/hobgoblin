@@ -4,12 +4,12 @@ try:
 except ImportError:
     import json
 
-from gremlin_python.structure.io import graphsonV2d0 as graphson
+from gremlin_python.structure.io.graphsonV3d0 import GraphSONWriter
 from hobgoblin.element import Vertex, Edge, VertexProperty
 from hobgoblin.manager import ListVertexPropertyManager
 
 
-writer = graphson.GraphSONWriter()
+writer = GraphSONWriter()
 
 
 AdjList = collections.namedtuple("AdjList", "vertex inE outE")

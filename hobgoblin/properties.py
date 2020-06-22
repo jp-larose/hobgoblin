@@ -1,6 +1,7 @@
 """Classes to handle properties and data type definitions"""
 
 import logging
+from typing import Any
 
 from gremlin_python.statics import long
 
@@ -207,7 +208,7 @@ class Float(abc.DataType):
 class Boolean(abc.DataType):
     """Simple boolean datatype"""
 
-    def validate(self, val):
+    def validate(self, val: Any):
         try:
             val = bool(val)
         except ValueError:

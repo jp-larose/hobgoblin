@@ -23,6 +23,9 @@ def pytest_addoption(parser):
     parser.addoption('--gremlin-host', default='localhost')
     parser.addoption('--gremlin-port', default='8182')
 
+def pytest_configure(config):
+    config.addinivalue_line("markers", "skip_if_dse: Skip the test if provider is 'dse'")
+    config.addinivalue_line("markers", "xfail_if_dse: Fail the test if provider is 'dse'")
 
 def pytest_collection_modifyitems(config, items):
     skip_dse = pytest.mark.skip(reason="Not supported by DSE")
@@ -64,11 +67,9 @@ class Person(element.Vertex):
 
 class Place(element.Vertex):
     name = properties.Property(properties.String)
-    zipcode = properties.Property(
-        properties.Integer, db_name_factory=db_name_factory)
+    zipcode = properties.Property(properties.Integer, db_name_factory=db_name_factory)
     historical_name = HistoricalName(properties.String, card=Cardinality.list_)
-    important_numbers = element.VertexProperty(
-        properties.Integer, card=Cardinality.set_)
+    important_numbers = element.VertexProperty(properties.Integer, card=Cardinality.set_)
     incorporated = element.VertexProperty(properties.Boolean, default=False)
 
 

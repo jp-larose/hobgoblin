@@ -1,6 +1,8 @@
 from hobgoblin import element
 from hobgoblin.fileio.graphson import dump, dumps, AdjList
 
+import tempfile
+
 
 # def test_dump_simple_vertex(person):
 #     person.id = 1
@@ -47,4 +49,5 @@ def test_dumps(person_class, knows_class):
 
     print(dumps(al1))
     print(dumps(al2))
-    dump('/home/davebshow/test_graph.json', al1, al2)
+    tmp = tempfile.gettempdir()
+    dump(tmp + '/test_graph.json', al1, al2)
