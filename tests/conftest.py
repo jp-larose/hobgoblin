@@ -24,6 +24,18 @@ def pytest_addoption(parser):
     parser.addoption('--gremlin-port', default='8182')
 
 
+def pytest_collection_modifyitems(config, items):
+    skip_dse = pytest.mark.skip(reason="Not supported by DSE")
+    xfail_dse = pytest.mark.xfail(reason="Fails in DSE")
+    if config.getoption('--provider') == 'dse':
+        for item in items:
+            if 'skip_if_dse' in item.keywords:
+                item.add_marker(skip_dse)
+            if 'xfail_if_dse' in item.keywords:
+                item.add_marker(xfail_dse)
+
+
+
 def db_name_factory(x, y):
     return "{}__{}".format(y, x)
 

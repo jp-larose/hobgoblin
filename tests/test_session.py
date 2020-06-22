@@ -245,8 +245,7 @@ class TestCreationApi:
         assert not result.age
         await app.close()
 
-    @pytest.mark.skipif(
-        pytest.config.getoption('provider') == 'dse', reason='DSE')
+    @pytest.mark.skip_if_dse
     @pytest.mark.asyncio
     async def test_update_edge(self, app, person_class, knows):
         session = await app.session()

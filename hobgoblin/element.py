@@ -18,7 +18,7 @@ class ElementMeta(type):
     :py:class:`hobgoblin.properties.PropertyDescriptor`.
     """
 
-    def __new__(cls, name, bases, namespace, **kwds):
+    def __new__(cls, name, bases, namespace, **kwargs):
         props = {}
         if name == 'VertexProperty':
             element_type = name.lower()

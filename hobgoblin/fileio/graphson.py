@@ -4,7 +4,7 @@ try:
 except ImportError:
     import json
 
-from gremlin_python.structure.io import graphson
+from gremlin_python.structure.io import graphsonV2d0 as graphson
 from hobgoblin.element import Vertex, Edge, VertexProperty
 from hobgoblin.manager import ListVertexPropertyManager
 
