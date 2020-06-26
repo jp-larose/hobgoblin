@@ -4,10 +4,11 @@ import uuid
 import pytest
 
 from hobgoblin.driver import GremlinServer
+from aiogremlin.driver.cluster import Cluster
 
 
 @pytest.mark.asyncio
-async def test_client_auto_release(cluster):
+async def test_client_auto_release(cluster: Cluster):
     client = await cluster.connect()
     resp = await client.submit("1 + 1")
     async for msg in resp:

@@ -330,6 +330,7 @@ class TestTraversalApi:
         e1 = await session.g.V(Binding('p1_id', p1.id)).addE('knows').to(
             session.g.V(Binding('p2_id', p2.id))).property(
                 knows_class.notes, 'somehow').property('how_long', 1).next()
+        breakpoint()
         assert isinstance(e1, knows_class)
         assert e1.notes == 'somehow'
         assert e1.how_long == 1
