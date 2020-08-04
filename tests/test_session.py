@@ -42,6 +42,7 @@ class TestCreationApi:
     @pytest.mark.asyncio
     async def test_create_inherited(self, app, inherited_class):
         session = await app.session()
+        assert inherited_class.is_vertex()
         jon = inherited_class()
         jon.name = 'jonathan'
         jon.age = 38
@@ -71,8 +72,8 @@ class TestCreationApi:
         assert lives_in.source is jon
         assert lives_in.target is montreal
         # Not supported by current graphson version
-        assert lives_in.source.__label__ == 'person'
-        assert lives_in.target.__label__ == 'place'
+        assert lives_in.source.label == 'person'
+        assert lives_in.target.label == 'place'
         await app.close()
 
     @pytest.mark.asyncio
@@ -330,7 +331,7 @@ class TestTraversalApi:
         e1 = await session.g.V(Binding('p1_id', p1.id)).addE('knows').to(
             session.g.V(Binding('p2_id', p2.id))).property(
                 knows_class.notes, 'somehow').property('how_long', 1).next()
-        breakpoint()
+        # breakpoint()
         assert isinstance(e1, knows_class)
         assert e1.notes == 'somehow'
         assert e1.how_long == 1
@@ -343,7 +344,7 @@ class TestTraversalApi:
                                                              'dave').next()
         assert isinstance(dave, element.GenericVertex)
         assert dave.name == 'dave'
-        assert dave.__label__ == 'unregistered'
+        assert dave.label == 'unregistered'
         await app.close()
 
     @pytest.mark.asyncio
@@ -357,7 +358,7 @@ class TestTraversalApi:
                                                                1).next()
         assert isinstance(e1, element.GenericEdge)
         assert e1.how_long == 1
-        assert e1.__label__ == 'unregistered'
+        assert e1.label == 'unregistered'
         await app.close()
 
     @pytest.mark.asyncio

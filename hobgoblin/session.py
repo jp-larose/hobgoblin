@@ -1,4 +1,6 @@
 """Main OGM API classes and constructors"""
+from __future__ import annotations
+from typing import Any, Dict
 
 import asyncio
 import collections
@@ -6,18 +8,20 @@ import logging
 import weakref
 import uuid
 from typing import Callable, Awaitable, Any, Optional
+from autologging import logged, traced
 
 import aiogremlin
 from aiogremlin.driver.protocol import Message
 from aiogremlin.driver.resultset import ResultSet
 from gremlin_python.process.graph_traversal import __, GraphTraversal  # type: ignore
 from gremlin_python.driver.remote_connection import RemoteTraversal
-from gremlin_python.process.traversal import Binding, Cardinality, Traverser
-from gremlin_python.structure.graph import Edge, Vertex
+from gremlin_python.process.traversal import Binding, Cardinality, Traverser, T
+from gremlin_python.structure.graph import Edge, Vertex, Element
 
-from hobgoblin import exception, mapper
-from hobgoblin.element import GenericEdge, GenericVertex, VertexProperty, ImmutableMode, LockingMode
-from hobgoblin.manager import VertexPropertyManager
+from . import exception, mapper
+from .element import GenericEdge, GenericVertex, VertexProperty
+from .meta import ImmutableMode, LockingMode
+from .manager import VertexPropertyManager
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +45,8 @@ def bindprop(element_class, ogm_name, val, *, binding=None):
         val = (binding, val)
     return db_name, val
 
-
+@traced
+@logged
 class Session:
     """
     Provides the main API for interacting with the database. Does not
@@ -124,9 +129,11 @@ class Session:
         traversal = self.graph.traversal().withRemote(self)
         if element_class:
             label = element_class.__mapping__.label
-            if element_class.__type__ == 'vertex':
+            # if element_class.type == 'vertex':
+            if element_class.is_vertex():
                 traversal = traversal.V()
-            if element_class.__type__ == 'edge':
+            # if element_class.type == 'edge':
+            if element_class.is_edge():
                 traversal = traversal.E()
             traversal = traversal.hasLabel(label)
         return traversal
@@ -148,7 +155,11 @@ class Session:
         side_effects = remote_traversal.side_effects
         result_set = ResultSet(traversers.request_id, traversers._timeout,
                                self._loop)
-        self._loop.create_task(self._receive(traversers, result_set))
+        coro = self._receive(traversers, result_set)
+        if self._loop:
+            self._loop.create_task(coro)
+        else:
+            asyncio.create_task(coro)
         return RemoteTraversal(result_set, side_effects)
 
     async def _receive(self, traversers, result_set):
@@ -167,20 +178,21 @@ class Session:
         if isinstance(result, Traverser):
             bulk = result.bulk
             obj = result.object
+            logger.debug(f"{obj=} {result=}")
             if isinstance(obj, (Vertex, Edge)):
                 hashable_id = self._get_hashable_id(obj.id)
                 current = self.current.get(hashable_id, None)
+                label = obj.label
+                #breakpoint()
+
                 if isinstance(obj, Vertex):
-                    # why doesn't this come in on the vertex?
-                    label = await self._g.V(obj.id).label().next()
                     if not current:
                         current = self.app.vertices.get(label, GenericVertex)()
                     props = await self._get_vertex_properties(obj.id, label)
                 if isinstance(obj, Edge):
                     props = await self._g.E(obj.id).valueMap(True).next()
                     if not current:
-                        current = self.app.edges.get(
-                                props.get('label'), GenericEdge)()
+                        current = self.app.edges.get(label, GenericEdge)()
                         current.source = GenericVertex()
                         current.target = GenericVertex()
                 element = current.__mapping__.mapper_func(obj, props, current)
@@ -190,15 +202,17 @@ class Session:
                 return result
         # Recursive serialization is broken in hobgoblin
         elif isinstance(result, dict):
-            for key in result:
-                result[key] = self._deserialize_result(result[key])
-            return result
+            new_result = {key: self._deserialize_result(result[key]) for key in result.keys()}
+            # for key in result:
+            #     result[key] = self._deserialize_result(result[key])
+            return new_result
         elif isinstance(result, list):
             return [self._deserialize_result(item) for item in result]
         else:
             return result
 
     async def _get_vertex_properties(self, vid, label):
+        #breakpoint()
         projection = self._g.V(vid).properties() \
             .project('id', 'key', 'value', 'meta') \
             .by(__.id()).by(__.key()).by(__.value()) \
@@ -244,13 +258,14 @@ class Session:
             while self._pending:
                 elem = self._pending.popleft()
                 actual_id = self.__dirty_element(elem, id=transaction_id)
-                if actual_id:
-                    processed.append(await self.save(elem))
-                else:
-                    await self.save(elem)
+                #if actual_id:
+                processed.append(await self.save(elem))
+                #else:
+                #    await self.save(elem)
                     # continue
 
-                if not processed: return
+                if not processed:
+                    return
                 if not conflicts_query:
                     await self.__commit_transaction(transaction_id)
                 else:
@@ -264,13 +279,13 @@ class Session:
                            has('dirty', transaction_id).
                            aggregate('x').
                            choose(
-                             conflicts_query,
-                             __.
+                            conflicts_query,
+                            __.
                                 select('x').
                                 unfold().
                                 properties('dirty').
                                 drop()
-                           ).
+                    ).
                            iterate())  # type: ignore
                     await self.__rollback_transaction(transaction_id)
         except Exception as e:
@@ -279,7 +294,6 @@ class Session:
 
         for elem in processed:
             elem.dirty = None
-
 
     async def remove_vertex(self, vertex):
         """
@@ -298,7 +312,6 @@ class Session:
             logger.warning(msg)
         del vertex
         return result
-
 
     async def remove_edge(self, edge):
         """
@@ -321,24 +334,24 @@ class Session:
         del edge
         return result
 
-
     async def save(self, elem):
         """
         Save an element to the db.
 
-        :param hobgoblin.element.Element element: Vertex or Edge to be saved
+        :param hobgoblin.element.Element elem: Vertex or Edge to be saved
 
         :returns: :py:class:`Element<hobgoblin.element.Element>` object
         """
-        if elem.__type__ == 'vertex':
+        #if elem.type == 'vertex':
+        if elem.is_vertex():
             result = await self.save_vertex(elem)
-        elif elem.__type__ == 'edge':
+        #elif elem.type == 'edge':
+        elif elem.is_edge():
             result = await self.save_edge(elem)
         else:
             raise exception.ElementError("Unknown element type: {}".format(
-                    elem.__type__))
+                    elem._type))
         return result
-
 
     async def save_vertex(self, vertex):
         """
@@ -353,7 +366,6 @@ class Session:
         hashable_id = self._get_hashable_id(result.id)
         self.current[hashable_id] = result
         return result
-
 
     async def save_edge(self, edge):
         """
@@ -372,7 +384,6 @@ class Session:
         self.current[hashable_id] = result
         return result
 
-
     async def get_vertex(self, vertex):
         """
         Get a vertex from the db. Vertex must have id.
@@ -382,7 +393,6 @@ class Session:
         :returns: :py:class:`Vertex<hobgoblin.element.Vertex>` | None
         """
         return await self.g.V(Binding('vid', vertex.id)).next()
-
 
     async def get_edge(self, edge):
         """
@@ -397,27 +407,23 @@ class Session:
             eid = Binding('eid', edge.id)
         return await self.g.E(eid).next()
 
-
     def __dirty_element(self, elem, id=str(uuid.uuid4())):
         if elem.__locking__ and elem.__locking__ == LockingMode.OPTIMISTIC_LOCKING:
             if not elem.dirty:
                 elem.dirty = id
-                return id
-            else:
-                return elem.dirty
+            return elem.dirty
         return None
 
-
     async def __commit_transaction(self, id):
-        if id: await self._g.E().has('dirty', id).aggregate('x').fold().V().has('dirty', id).aggregate('x').select(
-            'x').unfold().properties('dirty').drop().iterate()
-
+        if id:
+            await self._g.E().has('dirty', id).aggregate('x').fold().V().has('dirty', id).aggregate('x').select(
+                    'x').unfold().properties('dirty').drop().iterate()
 
     async def __rollback_transaction(self, id):
         print("id of: %s" % id)
-        if id: await self._g.E().has('dirty', id).aggregate('x').fold().V().has('dirty', id).aggregate('x').select(
-            'x').unfold().drop().iterate()
-
+        if id:
+            await self._g.E().has('dirty', id).aggregate('x').fold().V().has('dirty', id).aggregate('x').select(
+                    'x').unfold().drop().iterate()
 
     async def _update_vertex(self, vertex):
         """
@@ -430,7 +436,6 @@ class Session:
         props = mapper.map_props_to_db(vertex, vertex.__mapping__)
         traversal = self._g.V(Binding('vid', vertex.id))
         return await self._update_vertex_properties(vertex, traversal, props)
-
 
     async def _update_edge(self, edge):
         """
@@ -447,21 +452,21 @@ class Session:
         traversal = self._g.E(eid)
         return await self._update_edge_properties(edge, traversal, props)
 
-
     # *metodos especiales privados for creation API
 
     async def _simple_traversal(self, traversal, element):
         elem = await traversal.next()
         if elem:
-            if element.__type__ == 'vertex':
+            #if element.type == 'vertex':
+            if element.is_vertex():
                 # Look into this
                 label = await self._g.V(elem.id).label().next()
                 props = await self._get_vertex_properties(elem.id, label)
-            elif element.__type__ == 'edge':
+            #elif element.type == 'edge':
+            elif element.is_edge():
                 props = await self._g.E(elem.id).valueMap(True).next()
             elem = element.__mapping__.mapper_func(elem, props, element)
         return elem
-
 
     async def __handle_create_func(self, elem, create_func):
         transaction_id = elem.dirty
@@ -480,27 +485,25 @@ class Session:
 
         return await create_func(elem)
 
-
     async def _save_element(self, elem, check_func, create_func, update_func):
         if hasattr(elem, 'id'):
             exists = await check_func(elem)
             if not exists:
                 result = await self.__handle_create_func(elem, create_func)
             else:
-                if elem.__immutable__ and elem.__immutable__ != ImmutableMode.OFF: raise AttributeError(
-                    "Trying to update an immutable element: %s" % elem)
+                if elem.__immutable__ and elem.__immutable__ != ImmutableMode.OFF:
+                    raise AttributeError(
+                            "Trying to update an immutable element: %s" % elem)
                 result = await update_func(elem)
         else:
             result = await self.__handle_create_func(elem, create_func)
         return result
-
 
     async def _add_vertex(self, vertex):
         """Convenience function for generating crud traversals."""
         props = mapper.map_props_to_db(vertex, vertex.__mapping__)
         traversal = self._g.addV(vertex.__mapping__.label)
         return await self._add_properties(traversal, props, vertex)
-
 
     async def _add_edge(self, edge):
         """Convenience function for generating crud traversals."""
@@ -510,12 +513,10 @@ class Session:
         traversal = traversal.to(__.V(Binding('tid', edge.target.id)))
         return await self._add_properties(traversal, props, edge)
 
-
     async def _check_vertex(self, vertex):
         """Used to check for existence, does not update session vertex"""
         msg = await self._g.V(Binding('vid', vertex.id)).next()
         return msg
-
 
     async def _check_edge(self, edge):
         """Used to check for existence, does not update session edge"""
@@ -524,16 +525,13 @@ class Session:
             eid = Binding('eid', edge.id)
         return await self._g.E(eid).next()
 
-
     async def _update_vertex_properties(self, vertex, traversal, props):
         await self._g.V(vertex.id).properties().drop().iterate()
         return await self._add_properties(traversal, props, vertex)
 
-
     async def _update_edge_properties(self, edge, traversal, props):
         await self._g.E(edge.id).properties().drop().iterate()
         return await self._add_properties(traversal, props, edge)
-
 
     async def _add_properties(self, traversal, props, elem):
         binding = 0

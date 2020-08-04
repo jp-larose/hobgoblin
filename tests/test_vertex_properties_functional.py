@@ -1,7 +1,7 @@
 import pytest
 import _pytest
 from aiogremlin import Graph
-from gremlin_python.process.traversal import Cardinality
+from gremlin_python.process.traversal import Cardinality, T
 
 
 @pytest.mark.asyncio
@@ -84,27 +84,24 @@ async def test_metas(app, place, remote_connection):
     assert len(dprops) == 4
     trav = g.V(detroit.id).properties('historical_name').valueMap(True)
     dmetas = await trav.toList()
+    #breakpoint()
+    assert dmetas[0][T.value] == 'Detroit'  # TODO: figure out where these are set, add string keys for the aenum T
     assert dmetas[0]['value'] == 'Detroit'
     assert dmetas[0]['notes'] == 'rock city'
     assert dmetas[0]['year'] == 1900
+    assert dmetas[1][T.value] == 'Other'
     assert dmetas[1]['value'] == 'Other'
     assert dmetas[1]['notes'] == 'unknown'
     assert dmetas[1]['year'] == 1700
     new_session = await app.session()
     new_detroit = await new_session.g.V(detroit.id).next()
     assert new_detroit.zipcode == detroit.zipcode
-    assert new_detroit.historical_name[-1].value == detroit.historical_name[
-        -1].value
-    assert new_detroit.historical_name[-1].notes == detroit.historical_name[
-        -1].notes
-    assert new_detroit.historical_name[-1].year == detroit.historical_name[
-        -1].year
-    assert new_detroit.historical_name[0].value == detroit.historical_name[
-        0].value
-    assert new_detroit.historical_name[0].notes == detroit.historical_name[
-        0].notes
-    assert new_detroit.historical_name[0].year == detroit.historical_name[
-        0].year
+    assert new_detroit.historical_name[-1].value == detroit.historical_name[-1].value
+    assert new_detroit.historical_name[-1].notes == detroit.historical_name[-1].notes
+    assert new_detroit.historical_name[-1].year == detroit.historical_name[-1].year
+    assert new_detroit.historical_name[0].value == detroit.historical_name[0].value
+    assert new_detroit.historical_name[0].notes == detroit.historical_name[0].notes
+    assert new_detroit.historical_name[0].year == detroit.historical_name[0].year
     await remote_connection.close()
     await app.close()
 

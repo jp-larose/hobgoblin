@@ -11,8 +11,9 @@ from aiogremlin.driver.cluster import Cluster
 async def test_client_auto_release(cluster: Cluster):
     client = await cluster.connect()
     resp = await client.submit("1 + 1")
-    async for msg in resp:
-        pass
+#    async for msg in resp:
+#        pass
+    lst = await resp.all()
     await asyncio.sleep(0)
     host = cluster._hosts.popleft()
     assert len(host._pool._available) == 1

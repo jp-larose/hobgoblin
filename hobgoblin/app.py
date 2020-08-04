@@ -1,14 +1,23 @@
 """Hobgoblin application class and class constructor"""
+from __future__ import annotations
+from typing import Any
 
 import collections
 import importlib
 import logging
 
-import aiogremlin
+from aiogremlin import DriverRemoteConnection, Cluster, util
 
-from hobgoblin import element, provider, session
+from .element import Edge, Vertex, VertexProperty, GenericEdge, GenericVertex
+from .meta import ElementMeta
+from .provider import Provider, TinkerGraph
+from .session import Session
+
+from . import typehints as th
 
 logger = logging.getLogger(__name__)
+
+__all__ = ['Hobgoblin']
 
 
 # Main API classes
@@ -18,23 +27,28 @@ class Hobgoblin:
     database connections Used as a factory to create
     :py:class:`Session<hobgoblin.session.Session>` objects.
 
-    :param str url: Database url
-    :param asyncio.BaseEventLoop loop: Event loop implementation
-    :param dict features: Vendor implementation specific database features
-    :param dict config: Config parameters for application
+    :param loop: Event loop implementation
+    :param provider: Implementation of the graph provider
+    :param get_hashable_id: Callable to
+
+    .. deprecated:: 3.0
+    The loop parameter is deprecated in the asyncio package since Python 3.8.
     """
 
     def __init__(self,
-                 cluster,
+                 cluster: Cluster,
                  *,
-                 provider=provider.TinkerGraph,
-                 get_hashable_id=None,
+                 loop: th.MaybeLoop = None,
+                 provider: th.Type[Provider] = TinkerGraph, # noqa
+                 get_hashable_id: th.Optional[th.Callable[[Any], Any]] = None,
                  aliases=None):
+        util.check_loop_deprecation(loop)
+
         self._cluster = cluster
-        self._loop = self._cluster._loop
+        self._loop = loop if loop else cluster._loop  # noqa
         self._cluster = cluster
-        self._vertices = collections.defaultdict(lambda: element.GenericVertex)
-        self._edges = collections.defaultdict(lambda: element.GenericEdge)
+        self._vertices = collections.defaultdict(lambda: GenericVertex)
+        self._edges = collections.defaultdict(lambda: GenericEdge)
         self._vertex_properties = {}
         self._provider = provider
         if not get_hashable_id:
@@ -46,18 +60,19 @@ class Hobgoblin:
 
     @classmethod
     async def open(cls,
-                   loop,
                    *,
-                   provider=provider.TinkerGraph,
+                   loop=None,
+                   provider=TinkerGraph, # noqa
                    get_hashable_id=None,
                    aliases=None,
-                   **config):
+                   **cluster_config):
         # App currently only supports GraphSON 1
         # aiogremlin does not yet support providers
-        cluster = await aiogremlin.Cluster.open(
-            loop, aliases=aliases, **config)
-        app = Hobgoblin(
-            cluster,
+        util.check_loop_deprecation(loop)
+        cluster = await Cluster.open(
+            loop=loop, aliases=aliases, **cluster_config)
+        app = cls(
+            cluster=cluster,
             provider=provider,
             get_hashable_id=get_hashable_id,
             aliases=aliases)
@@ -86,10 +101,10 @@ class Hobgoblin:
         """Registered edge classes"""
         return self._edges
 
-    @property
-    def url(self):
-        """Database url"""
-        return self._url
+    # @property
+    # def url(self):
+    #     """Database url"""
+    #     return self._url
 
     def register(self, *elements):
         """
@@ -97,13 +112,16 @@ class Hobgoblin:
 
         :param hobgoblin.element.Element elements: User defined Element classes
         """
-        for element in elements:
-            if element.__type__ == 'vertex':
-                self._vertices[element.__label__] = element
-            if element.__type__ == 'edge':
-                self._edges[element.__label__] = element
-            if element.__type__ == 'vertexproperty':
-                self._vertex_properties[element.__label__] = element
+        for elem in elements:
+            # if elem.type == 'vertex':
+            if issubclass(elem, Vertex):
+                self._vertices[elem.label] = elem
+            # if elem.type == 'edge':
+            if issubclass(elem, Edge):
+                self._edges[elem.label] = elem
+            # if elem.type == 'vertexproperty':
+            if issubclass(elem, VertexProperty):
+                self._vertex_properties[elem.label] = elem
 
     def config_from_file(self, filename):
         """
@@ -133,7 +151,7 @@ class Hobgoblin:
         elements = list()
         for item_name in dir(module):
             item = getattr(module, item_name)
-            if isinstance(item, element.ElementMeta):
+            if isinstance(item, ElementMeta):
                 elements.append(item)
         self.register(*elements)
 
@@ -141,11 +159,17 @@ class Hobgoblin:
         """
         Create a session object.
 
+        :param processor: TODO
+        :param op: TODO
+        :param aliases: Gremlin aliases
+
         :returns: :py:class:`Session<hobgoblin.session.Session>` object
         """
-        remote_connection = await aiogremlin.DriverRemoteConnection.using(
-            self._cluster, aliases=self._aliases)
-        return session.Session(self, remote_connection, self._get_hashable_id)
+        if not aliases:
+            aliases = self._aliases
+        remote_connection = await DriverRemoteConnection.using(
+            self._cluster, aliases=aliases)
+        return Session(self, remote_connection, self._get_hashable_id)
 
     async def close(self):
         await self._cluster.close()

@@ -1,6 +1,7 @@
 """Python toolkit for Tinker Pop 3 Gremlin Server."""
 
-from hobgoblin.app import Hobgoblin
-from hobgoblin.driver import AsyncGraph, Cluster, DriverRemoteConnection, Graph
-from hobgoblin.element import Edge, Vertex, VertexProperty
-from hobgoblin.properties import Boolean, Float, Integer, Property, String
+from .app import Hobgoblin                                             # noqa F401
+from .driver import AsyncGraph, Cluster, DriverRemoteConnection, Graph # noqa F401
+from .element import Element, Edge, Vertex, VertexProperty             # noqa F401
+from .properties import Property                                       # noqa F401
+from .properties.datatypes import Boolean, Float, Integer, String      # noqa F401

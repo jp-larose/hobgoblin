@@ -30,12 +30,12 @@ def dumps(adj_list):
     vertex = _prep_vertex(adj_list.vertex)
     for inE in adj_list.inE:
         prepped = _prep_edge(inE, "inV")
-        label = inE.__label__
+        label = inE._label
         vertex["inE"].setdefault(label, [])
         vertex["inE"][label].append(prepped)
     for outE in adj_list.outE:
         prepped = _prep_edge(outE, "outV")
-        label = outE.__label__
+        label = outE._label
         vertex["outE"].setdefault(label, [])
         vertex["outE"][label].append(prepped)
     return json.dumps(vertex)
@@ -77,13 +77,11 @@ def _prep_vertex(v):
                 "@type": "g:Int32",
                 "@value": v.id
             },
-            "label": v.__label__,
+            "label": v._label,
             "properties": {},
             "outE": {},
             "inE": {}
     }
-
-
 
     for db_name, (ogm_name, _) in mapping.db_properties.items():
         prop = properties[ogm_name]
@@ -107,7 +105,7 @@ def _prep_vertex(v):
     return vertex
 
 
-def _prep_vp(prop, value, v, db_name):
+def _prep_vp(prop, value, _v, _db_name):
     vp = {
             "id": {
                 "@type": "g:Int64",
@@ -122,6 +120,5 @@ def _prep_vp(prop, value, v, db_name):
     return vp
 
 
-
-def _dump_edge(e):
+def _dump_edge(_e):
     pass

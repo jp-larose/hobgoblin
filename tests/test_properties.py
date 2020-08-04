@@ -3,7 +3,8 @@
 import pytest
 from gremlin_python.statics import long
 
-from hobgoblin import element, exception, manager, properties
+from hobgoblin import element, exception, manager
+from hobgoblin.properties import datatypes
 
 
 def test_set_change_property(person, lives_in):
@@ -69,7 +70,7 @@ def test_vertex_property_default():
     still representable. Addresses issue #52.
     """
     vp = element.VertexProperty(int)
-    assert repr(vp) == "<VertexProperty(type=0, value=None)"
+    assert repr(vp) == "<VertexProperty(type=0, value=None)>"
 
 
 def test_validate_vertex_prop(person):
@@ -150,7 +151,7 @@ def test_cant_set_vertex_prop_on_edge():
     with pytest.raises(exception.MappingError):
 
         class MyEdge(element.Edge):
-            vert_prop = element.VertexProperty(properties.String)
+            vert_prop = element.VertexProperty(datatypes.String)
 
 
 def test_meta_property_set_update(place):

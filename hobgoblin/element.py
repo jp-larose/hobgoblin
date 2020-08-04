@@ -1,85 +1,50 @@
 """Module defining graph elements."""
+from __future__ import annotations
+from typing import Optional, MutableMapping
 
 import logging
+from autologging import traced, logged
 
-import inflection
 from gremlin_python.process.traversal import Cardinality
-from enum import Enum
 
-from hobgoblin import abc, exception, mapper, properties
+from . import meta
+from .properties import datatypes, BaseProperty, Property, IdProperty, PropertyDescriptor
 
 logger = logging.getLogger(__name__)
 
-class ImmutableMode(Enum):
-    OFF = 0
-    SIMPLE = 1
 
-class LockingMode(Enum):
-    OFF = 0
-    OPTIMISTIC_LOCKING = 1
-
-class ElementMeta(type):
-    """
-    Metaclass for graph elements. Responsible for creating the
-    :py:class:`Mapping<hobgoblin.mapper.Mapping>` object and replacing user
-    defined :py:class:`hobgoblin.properties.Property` with
-    :py:class:`hobgoblin.properties.PropertyDescriptor`.
-    """
-
-    def __new__(cls, name, bases, namespace, **kwds):
-        props = {}
-        if name == 'VertexProperty':
-            element_type = name.lower()
-        elif bases:
-            element_type = bases[0].__type__
-            if element_type not in ['vertex', 'edge']:
-                element_type = bases[0].__name__.lower()
-            for base in bases:
-                base_props = getattr(base, '__properties__', {})
-                props.update(base_props)
-        else:
-            element_type = name.lower()
-        namespace['__type__'] = element_type
-        if not namespace.get('__label__', None):
-            namespace['__label__'] = inflection.underscore(name)
-        new_namespace = {}
-        props.pop('id', None)
-        for k, v in namespace.items():
-            if isinstance(v, abc.BaseProperty):
-                if element_type == 'edge' and hasattr(v, 'cardinality'):
-                    raise exception.MappingError(
-                        'Edge property cannot have set/list cardinality')
-                props[k] = v
-                if k != 'id':
-                    if not v.db_name:
-                        v.db_name = v.db_name_factory(k,
-                                                      namespace['__label__'])
-                v = v.__descriptor__(k, v)
-            new_namespace[k] = v
-        new_namespace['__mapping__'] = mapper.create_mapping(namespace, props)
-        new_namespace['__properties__'] = props
-        new_namespace['__immutable__'] = namespace.get('__immutable__', ImmutableMode.OFF)
-        new_namespace['__locking__'] = namespace.get('__locking__', LockingMode.OFF)
-        result = type.__new__(cls, name, bases, new_namespace)
-        return result
-
-
-class Element(metaclass=ElementMeta):
+@traced
+@logged
+class Element(metaclass=meta.ElementMeta):
     """Base class for classes that implement the Element property interface"""
 
     def __init__(self, **kwargs):
         for key, value in kwargs.items():
             if not (hasattr(self, key) and isinstance(
-                    getattr(self, key), properties.PropertyDescriptor)):
+                    getattr(self, key), PropertyDescriptor)):
                 raise AssertionError(
                     "No such property: {} for element {}".format(
                         key, self.__class__.__name__))
             setattr(self, key, value)
 
-    id = properties.IdProperty(properties.Generic)
-    dirty = properties.Property(properties.String)
+    id = IdProperty(datatypes.Generic)
+    dirty = Property(datatypes.String)
+
+    @classmethod
+    def is_edge(cls):
+        return False
+
+    @classmethod
+    def is_vertex(cls):
+        return False
+
+    @classmethod
+    def is_vertex_property(cls):
+        return False
 
 
+@traced
+@logged
 class VertexPropertyDescriptor:
     """
     Descriptor that validates user property input and gets/sets properties
@@ -92,11 +57,11 @@ class VertexPropertyDescriptor:
         self._vertex_property = vertex_property.__class__
         self._data_type = vertex_property.data_type
         self._default = vertex_property.default
-        self._cardinality = vertex_property._cardinality
+        self._cardinality = vertex_property.cardinality
 
-    def __get__(self, obj, objtype):
+    def __get__(self, obj, obj_type):
         if obj is None:
-            return getattr(objtype.__mapping__, self._prop_name)
+            return getattr(obj_type.__mapping__, self._prop_name)
         default = self._default
         if default is not None:
 
@@ -112,10 +77,10 @@ class VertexPropertyDescriptor:
         setattr(obj, self._name, val)
 
 
-class VertexProperty(Element, abc.BaseProperty):
+@traced
+@logged
+class VertexProperty(Element, BaseProperty, metaclass=meta.ElementPropertyMeta, descriptor=VertexPropertyDescriptor):
     """Base class for user defined vertex properties."""
-
-    __descriptor__ = VertexPropertyDescriptor
 
     def __init__(self,
                  data_type,
@@ -123,9 +88,12 @@ class VertexProperty(Element, abc.BaseProperty):
                  default=None,
                  db_name=None,
                  card=None,
-                 db_name_factory=None):
+                 db_name_factory=None,
+                 **kwargs):
+        super().__init__(**kwargs)
+
         if not db_name_factory:
-            def db_name_factory(x, y):
+            def db_name_factory(_x, _y):
                 pass
         if isinstance(data_type, type):
             data_type = data_type()
@@ -140,8 +108,8 @@ class VertexProperty(Element, abc.BaseProperty):
 
     def to_dict(self):
         result = {
-            '__label__': self.__label__,
-            '__type__': self.__type__,
+            '_label': self._label,
+            '_type': self._type,
             '__value__': self._val
         }
         for key, value in self.__properties__.items():
@@ -150,8 +118,8 @@ class VertexProperty(Element, abc.BaseProperty):
         return result
 
     def from_dict(self, d):
-        d.pop('__label__')
-        d.pop('__type__')
+        d.pop('_label')
+        d.pop('_type')
         d.pop('__value__')
         for key, value in d.items():
             setattr(self, key, value)
@@ -168,36 +136,39 @@ class VertexProperty(Element, abc.BaseProperty):
     def db_name_factory(self):
         return self._db_name_factory
 
-    def getvalue(self):
+    def get_value(self):
         return self._val
 
-    def setvalue(self, val):
+    def set_value(self, val):
         self._val = val
 
-    value = property(getvalue, setvalue)
+    value = property(get_value, set_value)
 
-    def getdb_name(self):
+    def get_db_name(self):
         return self._db_name
 
-    def setgetdb_name(self, val):
+    def set_db_name(self, val):
         self._db_name = val
 
-    db_name = property(getdb_name, setgetdb_name)
+    db_name = property(get_db_name, set_db_name)
 
     @property
     def cardinality(self):
         return self._cardinality
 
     def __repr__(self):
-        return '<{}(type={}, value={})'.format(self.__class__.__name__,
-                                               self._data_type, self.value)
+        return f'<{self.__class__.__name__}(type={self._data_type}, value={self.value})>'
+
+    @classmethod
+    def is_vertex_property(cls):
+        return True
 
 
 class Vertex(Element):
     """Base class for user defined Vertex classes"""
 
     def to_dict(self):
-        result = {'__label__': self.__label__, '__type__': self.__type__}
+        result = {'_label': self._label, '_type': self._type}
         for key, value in self.__properties__.items():
             vert_prop = getattr(self, key, None)
             if isinstance(vert_prop, (list, set)):
@@ -208,10 +179,10 @@ class Vertex(Element):
         return result
 
     @classmethod
-    def from_dict(cls, d):
+    def from_dict(cls, d: MutableMapping):
         elem = cls()
-        d.pop('__label__')
-        d.pop('__type__')
+        d.pop('_label')
+        d.pop('_type')
         for key, value in d.items():
             if isinstance(value, list):
                 first_prop = value[0]
@@ -238,6 +209,10 @@ class Vertex(Element):
                 setattr(elem, key, value)
         return elem
 
+    @classmethod
+    def is_vertex(cls):
+        return True
+
 
 class GenericVertex(Vertex):
     """
@@ -255,18 +230,19 @@ class Edge(Element):
     :param Vertex target: Target (inV) vertex
     """
 
-    def __init__(self, source=None, target=None):
+    def __init__(self, source: MaybeVertex = None, target: MaybeVertex = None, **kwargs):
+        super().__init__(**kwargs)
         self.source = source
         self.target = target
 
-    def to_dict(self, source=None, target=None):
+    def to_dict(self, source: MaybeVertex = None, target: MaybeVertex = None):
         if not source:
-            source = self.source.to_dict()
+            source = (self.source or GenericVertex()).to_dict()
         if not target:
-            target = self.target.to_dict()
+            target = (self.target or GenericVertex()).to_dict()
         result = {
-            '__label__': self.__label__,
-            '__type__': self.__type__,
+            '_label': self._label,
+            '_type': self._type,
             'source': source,
             'target': target
         }
@@ -278,35 +254,39 @@ class Edge(Element):
     @classmethod
     def from_dict(cls, d):
         elem = cls()
-        d.pop('__label__')
-        d.pop('__type__')
+        d.pop('_label')
+        d.pop('_type')
         for key, value in d.items():
             setattr(elem, key, value)
         return elem
 
-    def getsource(self):
+    def get_source(self):
         return self._source
 
-    def setsource(self, vertex):
+    def set_source(self, vertex):
         assert isinstance(vertex, Vertex) or vertex is None
         self._source = vertex
 
-    def delsource(self):
+    def del_source(self):
         del self._source
 
-    source = property(getsource, setsource, delsource)
+    source = property(get_source, set_source, del_source)
 
-    def gettarget(self):
+    def get_target(self):
         return self._target
 
-    def settarget(self, vertex):
+    def set_target(self, vertex):
         assert isinstance(vertex, Vertex) or vertex is None
         self._target = vertex
 
-    def deltarget(self):
+    def del_target(self):
         del self._target
 
-    target = property(gettarget, settarget, deltarget)
+    target = property(get_target, set_target, del_target)
+
+    @classmethod
+    def is_edge(cls):
+        return True
 
 
 class GenericEdge(Edge):
@@ -315,3 +295,9 @@ class GenericEdge(Edge):
     Generally not instantiated by end user.
     """
     pass
+
+
+# type hints
+MaybeElement = Optional[Element]
+MaybeVertex = Optional[Vertex]
+MaybeEdge = Optional[Edge]

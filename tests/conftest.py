@@ -1,11 +1,8 @@
-import asyncio
-
 import pytest
 from gremlin_python.process.traversal import Cardinality
 
 from hobgoblin import Hobgoblin, driver, element, properties
-from hobgoblin.driver import (
-    Connection, DriverRemoteConnection, GraphSONMessageSerializer)
+from hobgoblin.properties import datatypes
 from hobgoblin.provider import TinkerGraph
 
 
@@ -23,9 +20,11 @@ def pytest_addoption(parser):
     parser.addoption('--gremlin-host', default='localhost')
     parser.addoption('--gremlin-port', default='8182')
 
+
 def pytest_configure(config):
     config.addinivalue_line("markers", "skip_if_dse: Skip the test if provider is 'dse'")
     config.addinivalue_line("markers", "xfail_if_dse: Fail the test if provider is 'dse'")
+
 
 def pytest_collection_modifyitems(config, items):
     skip_dse = pytest.mark.skip(reason="Not supported by DSE")
@@ -38,39 +37,38 @@ def pytest_collection_modifyitems(config, items):
                 item.add_marker(xfail_dse)
 
 
-
 def db_name_factory(x, y):
     return "{}__{}".format(y, x)
 
 
 class HistoricalName(element.VertexProperty):
-    notes = properties.Property(properties.String)
-    year = properties.Property(properties.Integer)  # this is dumb but handy
+    notes = properties.Property(datatypes.String)
+    year = properties.Property(datatypes.Integer)  # this is dumb but handy
 
 
 class Location(element.VertexProperty):
-    year = properties.Property(properties.Integer)
+    year = properties.Property(datatypes.Integer)
 
 
 class Person(element.Vertex):
-    __label__ = 'person'
-    name = properties.Property(properties.String)
+    _label = 'person'
+    name = properties.Property(datatypes.String)
     age = properties.Property(
-        properties.Integer, db_name='custom__person__age')
-    birthplace = element.VertexProperty(properties.String)
-    location = Location(properties.String, card=Cardinality.list_)
+        datatypes.Integer, db_name='custom__person__age')
+    birthplace = element.VertexProperty(datatypes.String)
+    location = Location(datatypes.String, card=Cardinality.list_)
     nicknames = element.VertexProperty(
-        properties.String,
+        datatypes.String,
         card=Cardinality.list_,
         db_name_factory=db_name_factory)
 
 
 class Place(element.Vertex):
-    name = properties.Property(properties.String)
-    zipcode = properties.Property(properties.Integer, db_name_factory=db_name_factory)
-    historical_name = HistoricalName(properties.String, card=Cardinality.list_)
-    important_numbers = element.VertexProperty(properties.Integer, card=Cardinality.set_)
-    incorporated = element.VertexProperty(properties.Boolean, default=False)
+    name = properties.Property(datatypes.String)
+    zipcode = properties.Property(datatypes.Integer, db_name_factory=db_name_factory)
+    historical_name = HistoricalName(datatypes.String, card=Cardinality.list_)
+    important_numbers = element.VertexProperty(datatypes.Integer, card=Cardinality.set_)
+    incorporated = element.VertexProperty(datatypes.Boolean, default=False)
 
 
 class Inherited(Person):
@@ -78,12 +76,12 @@ class Inherited(Person):
 
 
 class Knows(element.Edge):
-    __label__ = 'knows'
-    notes = properties.Property(properties.String, default='N/A')
+    _label = 'knows'
+    notes = properties.Property(datatypes.String, default='N/A')
 
 
 class LivesIn(element.Edge):
-    notes = properties.Property(properties.String)
+    notes = properties.Property(datatypes.String)
 
 
 @pytest.fixture
@@ -136,65 +134,78 @@ def gremlin_url(gremlin_host, gremlin_port):
 
 
 @pytest.fixture
-def cluster(request, gremlin_host, gremlin_port, event_loop, provider,
-            aliases):
+async def cluster(request, gremlin_host, gremlin_port, provider, aliases):
     if request.param == 'c1':
-        cluster = driver.Cluster(
-            event_loop,
+        cluster = await driver.Cluster.open(
             hosts=[gremlin_host],
             port=gremlin_port,
+            response_timeout=10,
             aliases=aliases,
             provider=provider)
     elif request.param == 'c2':
-        cluster = driver.Cluster(
-            event_loop,
+        cluster = await driver.Cluster.open(
             hosts=[gremlin_host],
             port=gremlin_port,
+            response_timeout=10,
             aliases=aliases,
             provider=provider)
-    return cluster
+    yield cluster
+
+    # Teardown
+    await cluster.close()
 
 
 @pytest.fixture
-def connection(gremlin_url, event_loop, provider):
+async def connection(gremlin_url, provider):
     try:
-        conn = event_loop.run_until_complete(
-            driver.Connection.open(
-                gremlin_url,
-                event_loop,
-                message_serializer=GraphSONMessageSerializer,
-                provider=provider))
+        conn = await driver.Connection.open(
+                url=gremlin_url,
+                message_serializer=driver.GraphSONMessageSerializer,
+                response_timeout=10,
+                provider=provider)
     except OSError:
         pytest.skip('Gremlin Server is not running')
-    return conn
+        return
+    yield conn
+
+    # Teardown
+    if not conn.closed:
+        await conn.close()
 
 
 @pytest.fixture
-def remote_connection(event_loop, gremlin_url):
+async def remote_connection(gremlin_url):
     try:
-        remote_conn = event_loop.run_until_complete(
-            DriverRemoteConnection.open(gremlin_url, 'g'))
+        remote_conn = await driver.DriverRemoteConnection.open(url=gremlin_url, aliases='g', response_timeout=10)
     except OSError:
         pytest.skip('Gremlin Server is not running')
+        return
     else:
-        return remote_conn
+        yield remote_conn
+
+    # Teardown
+    await remote_conn.close()
 
 
 @pytest.fixture
-def connection_pool(gremlin_url, event_loop, provider):
-    return driver.ConnectionPool(
-        gremlin_url,
-        event_loop,
-        None,
-        '',
-        '',
-        4,
-        1,
-        16,
-        64,
-        None,
-        driver.GraphSONMessageSerializer,
+async def connection_pool(gremlin_url, provider):
+    pool = await driver.ConnectionPool.open(
+        url=gremlin_url,
+        ssl_context=None,
+        username='',
+        password='',
+        max_conns=4,
+        min_conns=1,
+        max_times_acquired=16,
+        max_inflight=64,
+        response_timeout=10,
+        message_serializer=driver.GraphSONMessageSerializer,
         provider=provider)
+
+    yield pool
+
+    # Teardown
+    await pool.close()
 
 
 @pytest.fixture
@@ -203,38 +214,41 @@ def remote_graph():
 
 
 @pytest.fixture
-def app(gremlin_host, gremlin_port, event_loop, provider, aliases):
-    app = event_loop.run_until_complete(
-        Hobgoblin.open(
-            event_loop,
+async def app(gremlin_host, gremlin_port, provider, aliases):
+    app = await Hobgoblin.open(
             provider=provider,
             aliases=aliases,
             hosts=[gremlin_host],
-            port=gremlin_port))
+            port=gremlin_port,
+            response_timeout=10
+        )
 
     app.register(Person, Place, Knows, LivesIn)
-    return app
+    yield app
+
+    # Teardown
+    await app.close()
 
 
 # Instance fixtures
 @pytest.fixture
 def string():
-    return properties.String()
+    return datatypes.String()
 
 
 @pytest.fixture
 def integer():
-    return properties.Integer()
+    return datatypes.Integer()
 
 
 @pytest.fixture
 def flt():
-    return properties.Float()
+    return datatypes.Float()
 
 
 @pytest.fixture
 def boolean():
-    return properties.Boolean()
+    return datatypes.Boolean()
 
 
 @pytest.fixture
@@ -262,25 +276,25 @@ def lives_in():
     return LivesIn()
 
 
-@pytest.fixture
-def place_name():
-    return PlaceName()
+# @pytest.fixture
+# def place_name():
+#     return PlaceName()
 
 
 # Class fixtures
 @pytest.fixture
-def cluster_class(event_loop):
+def cluster_class():
     return driver.Cluster
 
 
 @pytest.fixture
 def string_class():
-    return properties.String
+    return datatypes.String
 
 
 @pytest.fixture
 def integer_class():
-    return properties.Integer
+    return datatypes.Integer
 
 
 @pytest.fixture
@@ -313,29 +327,29 @@ def lives_in_class():
     return LivesIn
 
 
-@pytest.fixture
-def place_name_class():
-    return PlaceName
+# @pytest.fixture
+# def place_name_class():
+#     return PlaceName
 
 
 @pytest.fixture
 def string_class():
-    return properties.String
+    return datatypes.String
 
 
 @pytest.fixture
 def integer_class():
-    return properties.Integer
+    return datatypes.Integer
 
 
 @pytest.fixture
 def flt_class():
-    return properties.Float
+    return datatypes.Float
 
 
 @pytest.fixture
 def boolean_class():
-    return properties.Boolean
+    return datatypes.Boolean
 
 
 @pytest.fixture(autouse=True)
