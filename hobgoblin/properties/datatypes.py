@@ -1,35 +1,50 @@
 from __future__ import annotations
-from typing import Any
+from typing import Any, Callable
 
 import logging
-import abc
 
 from gremlin_python.process.traversal import Cardinality
 from gremlin_python.statics import long
 
 from hobgoblin import element, exception, manager
+from hobgoblin import typehints as th
 
 logger = logging.getLogger(__name__)
 
 
-class DataType(abc.ABC):
+def no_conversion(var):
+    return var
+
+
+class DataType:
     """
     Abstract base class for Hobgoblin Data Types. All custom data types should
     inherit from :py:class:`DataType`.
     """
-    py_type = None
 
-    def __init__(self, val: Any = None):
+    py_type: th.ClassVar[th.Callable[[th.Any], th.Any]]
+
+    @classmethod
+    def __init_subclass__(cls, py_type: th.Callable[[th.Any], th.Any], **_kwargs: th.Any):
+        if not py_type or not callable(py_type):
+            raise ValueError("py_type must be a valid callable", py_type)
+        cls.py_type = py_type
+
+    def __init__(self, val: th.Any = None):
         if val:
             val = self.validate(val)
         self._val = val
 
-    @abc.abstractmethod
-    def validate(self, val):
+    def validate(self, val: th.Any):
         """Validate property value"""
-        return val
+        if val is not None:
+            try:
+                return type(self).py_type(val)
+            except ValueError as err:
+                raise exception.ValidationError(
+                        f'Not a valid {type(self).py_type}: {val}') from err
+        return None
 
-    @abc.abstractmethod
     def to_db(self, val=None):
         """
         Convert property value to db compatible format. If no value passed, try
@@ -39,7 +54,6 @@ class DataType(abc.ABC):
             val = self._val
         return val
 
-    @abc.abstractmethod
     def to_ogm(self, val):
         """Convert property value to a Python compatible format"""
         return val
@@ -82,43 +96,22 @@ class DataType(abc.ABC):
             val = vp
         return val
 
-    def __repr__(self):
-        return f'{self.__class__.__name__} (py_type={self.py_type})'
+    def __str__(self):
+        return f'<Datatype: {self.__class__.__name__} (py_type={str(type(self).py_type)})>'
+
+    __repr__ = __str__
 
 
-class Generic(DataType):
-    def validate(self, val):
-        return super().validate(val)
-
-    def to_db(self, val=None):
-        return super().to_db(val=val)
-
-    def to_ogm(self, val):
-        return super().to_ogm(val)
+class Generic(DataType, py_type=no_conversion):
+    pass
 
 
-class String(DataType):
+class String(DataType, py_type=str):
     """Simple string datatype"""
-    py_type = str
-
-    def validate(self, val):
-        if val is not None:
-            try:
-                return str(val)
-            except ValueError as e:
-                raise exception.ValidationError(
-                    'Not a valid string: {}'.format(val)) from e
-
-    def to_db(self, val=None):
-        return super().to_db(val=val)
-
-    def to_ogm(self, val):
-        return super().to_ogm(val)
 
 
-class Integer(DataType):
+class Integer(DataType, py_type=int):
     """Simple integer datatype"""
-    py_type = int
 
     def validate(self, val):
         if val is not None:
@@ -126,50 +119,14 @@ class Integer(DataType):
                 if isinstance(val, long):
                     return long(val)
                 return int(val)
-            except (ValueError, TypeError) as e:
+            except (ValueError, TypeError) as err:
                 raise exception.ValidationError(
-                    'Not a valid integer: {}'.format(val)) from e
+                    f'Not a valid integer: {val}') from err
+        return None
 
-    def to_db(self, val=None):
-        return super().to_db(val=val)
-
-    def to_ogm(self, val):
-        return super().to_ogm(val)
-
-
-class Float(DataType):
+class Float(DataType, py_type=float):
     """Simple float datatype"""
-    py_type = float
-
-    def validate(self, val):
-        try:
-            val = float(val)
-        except ValueError as e:
-            raise exception.ValidationError(
-                "Not a valid float: {}".format(val)) from e
-        return val
-
-    def to_db(self, val=None):
-        return super().to_db(val=val)
-
-    def to_ogm(self, val):
-        return super().to_ogm(val)
 
 
-class Boolean(DataType):
+class Boolean(DataType, py_type=bool):
     """Simple boolean datatype"""
-    py_type = bool
-
-    def validate(self, val: Any):
-        try:
-            val = bool(val)
-        except ValueError as e:
-            raise exception.ValidationError(
-                "Not a valid boolean: {}".format(val)) from e
-        return val
-
-    def to_db(self, val=None):
-        return super().to_db(val=val)
-
-    def to_ogm(self, val):
-        return super().to_ogm(val)

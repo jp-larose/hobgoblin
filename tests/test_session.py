@@ -4,11 +4,11 @@ import pytest
 from gremlin_python.process.traversal import Binding
 
 from hobgoblin import element
-from hobgoblin.session import bindprop
+from hobgoblin.session import bind_prop
 
 
 def test_bindprop(person_class):
-    db_val, (binding, val) = bindprop(
+    db_val, (binding, val) = bind_prop(
         person_class, 'name', 'dave', binding='n1')
     assert db_val == 'name'
     assert binding == 'n1'
@@ -300,7 +300,7 @@ class TestTraversalApi:
         itziri = person_class()
         itziri.name = 'itziri'
         result1 = await session.save(itziri)
-        bound_name = bindprop(person_class, 'name', 'itziri', binding='v1')
+        bound_name = bind_prop(person_class, 'name', 'itziri', binding='v1')
         p1 = await session.traversal(person_class).has(*bound_name).next()
         await app.close()
 

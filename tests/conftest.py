@@ -38,7 +38,7 @@ def pytest_collection_modifyitems(config, items):
 
 
 def db_name_factory(x, y):
-    return "{}__{}".format(y, x)
+    return f"{y}__{x}"
 
 
 class HistoricalName(element.VertexProperty):
@@ -92,10 +92,10 @@ def provider(request):
     elif provider == 'dse':
         try:
             import goblin_dse
-        except ImportError:
+        except ImportError as e:
             raise RuntimeError(
                 "Couldn't run tests with DSEGraph provider: the goblin_dse "
-                "package must be installed")
+                "package must be installed") from e
         else:
             return goblin_dse.DSEGraph
 
@@ -115,7 +115,7 @@ def gremlin_server():
 
 @pytest.fixture
 def unused_server_url(unused_tcp_port):
-    return 'http://localhost:{}/gremlin'.format(unused_tcp_port)
+    return f'http://localhost:{unused_tcp_port}/gremlin'
 
 
 @pytest.fixture
@@ -130,29 +130,24 @@ def gremlin_port(request):
 
 @pytest.fixture
 def gremlin_url(gremlin_host, gremlin_port):
-    return "http://{}:{}/gremlin".format(gremlin_host, gremlin_port)
+    return f"http://{gremlin_host}:{gremlin_port}/gremlin"
 
 
 @pytest.fixture
 async def cluster(request, gremlin_host, gremlin_port, provider, aliases):
-    if request.param == 'c1':
-        cluster = await driver.Cluster.open(
-            hosts=[gremlin_host],
-            port=gremlin_port,
-            response_timeout=10,
-            aliases=aliases,
-            provider=provider)
-    elif request.param == 'c2':
-        cluster = await driver.Cluster.open(
-            hosts=[gremlin_host],
-            port=gremlin_port,
-            response_timeout=10,
-            aliases=aliases,
-            provider=provider)
+    cluster = await driver.Cluster.open(
+        hosts=[gremlin_host],
+        port=gremlin_port,
+        response_timeout=10,
+        aliases=aliases,
+        provider=provider,
+        cluster_name=request.param
+    )
     yield cluster
 
     # Teardown
-    await cluster.close()
+    if not cluster.closed:
+        await cluster.close()
 
 
 @pytest.fixture
@@ -176,7 +171,7 @@ async def connection(gremlin_url, provider):
 @pytest.fixture
 async def remote_connection(gremlin_url):
     try:
-        remote_conn = await driver.DriverRemoteConnection.open(url=gremlin_url, aliases='g', response_timeout=10)
+        remote_conn = await driver.DriverRemoteConnection.open(url=gremlin_url, aliases={'g': 'g'}, response_timeout=10)
     except OSError:
         pytest.skip('Gremlin Server is not running')
         return
@@ -184,7 +179,8 @@ async def remote_connection(gremlin_url):
         yield remote_conn
 
     # Teardown
-    await remote_conn.close()
+    if not remote_conn.closed:
+        await remote_conn.close()
 
 
 @pytest.fixture
@@ -205,7 +201,8 @@ async def connection_pool(gremlin_url, provider):
     yield pool
 
     # Teardown
-    await pool.close()
+    if not pool.closed:
+        await pool.close()
 
 
 @pytest.fixture
@@ -227,7 +224,8 @@ async def app(gremlin_host, gremlin_port, provider, aliases):
     yield app
 
     # Teardown
-    await app.close()
+    if not app.closed:
+        await app.close()
 
 
 # Instance fixtures
@@ -325,21 +323,6 @@ def knows_class():
 @pytest.fixture
 def lives_in_class():
     return LivesIn
-
-
-# @pytest.fixture
-# def place_name_class():
-#     return PlaceName
-
-
-@pytest.fixture
-def string_class():
-    return datatypes.String
-
-
-@pytest.fixture
-def integer_class():
-    return datatypes.Integer
 
 
 @pytest.fixture

@@ -246,6 +246,6 @@ class TestBoolean:
         boolean = boolean_class(True)
         assert boolean.to_db()
 
-    def test_initval_to_db_true(self, boolean_class):
+    def test_initval_to_db_false(self, boolean_class):
         boolean = boolean_class(False)
         assert not boolean.to_db()

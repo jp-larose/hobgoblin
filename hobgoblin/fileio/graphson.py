@@ -14,7 +14,7 @@ writer = GraphSONWriter()
 
 AdjList = collections.namedtuple("AdjList", "vertex inE outE")
 
-vp_id = 10
+VP_ID = 10
 
 
 def dump(fpath, *adj_lists, mode="w"):
@@ -25,17 +25,17 @@ def dump(fpath, *adj_lists, mode="w"):
             f.write(dumped + '\n')
 
 
-def dumps(adj_list):
+def dumps(adj_list: AdjList):
     """Convert Hobgoblin elements to GraphSON"""
     vertex = _prep_vertex(adj_list.vertex)
     for inE in adj_list.inE:
         prepped = _prep_edge(inE, "inV")
-        label = inE._label
+        label = inE.label
         vertex["inE"].setdefault(label, [])
         vertex["inE"][label].append(prepped)
     for outE in adj_list.outE:
         prepped = _prep_edge(outE, "outV")
-        label = outE._label
+        label = outE.label
         vertex["outE"].setdefault(label, [])
         vertex["outE"][label].append(prepped)
     return json.dumps(vertex)
@@ -62,22 +62,22 @@ def _prep_edge(e, t):
         },
         "properties": {}
     }
-    for db_name, (ogm_name, _) in e.__mapping__.db_properties.items():
+    for db_name, (ogm_name, _) in e.mapping.db_properties.items():
         edge["properties"][db_name] = writer.toDict(getattr(e, ogm_name))
 
     return edge
 
 
 def _prep_vertex(v):
-    global vp_id
-    mapping = v.__mapping__
-    properties = v.__properties__
+    global VP_ID
+    mapping = v.mapping
+    properties = v.properties
     vertex = {
             "id": {
                 "@type": "g:Int32",
                 "@value": v.id
             },
-            "label": v._label,
+            "label": v.metadata.label,
             "properties": {},
             "outE": {},
             "inE": {}
@@ -92,7 +92,7 @@ def _prep_vertex(v):
                 for p in prop:
                     value = p.value
                     vp = _prep_vp(p, value, v, db_name)
-                    vp_id += 1
+                    VP_ID += 1
                     vertex["properties"][db_name].append(vp)
                 continue
             else:
@@ -100,7 +100,7 @@ def _prep_vertex(v):
         else:
             value = getattr(v, ogm_name)
         vp = _prep_vp(prop, value, v, db_name)
-        vp_id += 1
+        VP_ID += 1
         vertex["properties"][db_name].append(vp)
     return vertex
 
@@ -109,13 +109,13 @@ def _prep_vp(prop, value, _v, _db_name):
     vp = {
             "id": {
                 "@type": "g:Int64",
-                "@value": vp_id
+                "@value": VP_ID
             },
             "value": writer.toDict(value),
             "properties": {}
     }
     if isinstance(prop, VertexProperty):
-        for db_name, (ogm_name, _) in prop.__mapping__.db_properties.items():
+        for db_name, (ogm_name, _) in prop.mapping.db_properties.items():
             vp["properties"][db_name] = writer.toDict(getattr(prop, ogm_name))
     return vp
 

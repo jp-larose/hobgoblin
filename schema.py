@@ -3,6 +3,7 @@ import datetime
 import logging
 
 from hobgoblin import properties
+from hobgoblin.properties import datatypes
 
 logger = logging.getLogger(__name__)
 
@@ -12,10 +13,10 @@ CARD_MAPPING = {'Cardinality.single': 'Cardinality.SINGLE',
                 'Cardinality.set_': 'Cardinality.SET'}
 
 
-DATA_TYPE_MAPPING = {properties.Integer: 'Integer.class',
-                     properties.Float: 'Float.class',
-                     properties.String: 'String.class',
-                     properties.Boolean: 'Boolean.class'}
+DATA_TYPE_MAPPING = {datatypes.Integer: 'Integer.class',
+                     datatypes.Float: 'Float.class',
+                     datatypes.String: 'String.class',
+                     datatypes.Boolean: 'Boolean.class'}
 
 
 prop_keys = {}
@@ -55,7 +56,7 @@ def get_vertex_schema(label, vertex):
     vertex_schema = "// Schema for vertex label: {}\n".format(label)
     vertex_schema += "{} = mgmt.makeVertexLabel('{}').make()\n".format(label, label)
     mapping = vertex.__mapping__
-    properties = vertex.__properties__
+    properties = vertex.properties
     for db_name, (ogm_name, _) in mapping.db_properties.items():
         prop = properties[ogm_name]
 

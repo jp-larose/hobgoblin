@@ -8,7 +8,7 @@ import logging
 
 from aiogremlin import DriverRemoteConnection, Cluster, util
 
-from .element import Edge, Vertex, VertexProperty, GenericEdge, GenericVertex
+from .element import Element, Edge, Vertex, VertexProperty, GenericEdge, GenericVertex
 from .meta import ElementMeta
 from .provider import Provider, TinkerGraph
 from .session import Session
@@ -38,8 +38,8 @@ class Hobgoblin:
     def __init__(self,
                  cluster: Cluster,
                  *,
-                 loop: th.MaybeLoop = None,
-                 provider: th.Type[Provider] = TinkerGraph, # noqa
+                 loop: th.OptLoop = None,
+                 provider: th.Type[Provider] = TinkerGraph,  # noqa
                  get_hashable_id: th.Optional[th.Callable[[Any], Any]] = None,
                  aliases=None):
         util.check_loop_deprecation(loop)
@@ -47,9 +47,9 @@ class Hobgoblin:
         self._cluster = cluster
         self._loop = loop if loop else cluster._loop  # noqa
         self._cluster = cluster
-        self._vertices = collections.defaultdict(lambda: GenericVertex)
-        self._edges = collections.defaultdict(lambda: GenericEdge)
-        self._vertex_properties = {}
+        self._vertices: th.DefaultDict[str, th.Type[Vertex]] = collections.defaultdict(lambda: GenericVertex)
+        self._edges: th.DefaultDict[str, th.Type[Edge]] = collections.defaultdict(lambda: GenericEdge)
+        self._vertex_properties: th.Dict[str, th.Type[VertexProperty]] = {}
         self._provider = provider
         if not get_hashable_id:
             get_hashable_id = self._provider.get_hashable_id
@@ -57,6 +57,7 @@ class Hobgoblin:
         if aliases is None:
             aliases = {}
         self._aliases = aliases
+        self._closed = False
 
     @classmethod
     async def open(cls,
@@ -106,22 +107,20 @@ class Hobgoblin:
     #     """Database url"""
     #     return self._url
 
-    def register(self, *elements):
+    def register(self, *elements: th.Type[Element]):
         """
         Register user created Element classes.
 
         :param hobgoblin.element.Element elements: User defined Element classes
         """
         for elem in elements:
-            # if elem.type == 'vertex':
+            label = elem.metadata.label
             if issubclass(elem, Vertex):
-                self._vertices[elem.label] = elem
-            # if elem.type == 'edge':
+                self._vertices[label] = elem
             if issubclass(elem, Edge):
-                self._edges[elem.label] = elem
-            # if elem.type == 'vertexproperty':
+                self._edges[label] = elem
             if issubclass(elem, VertexProperty):
-                self._vertex_properties[elem.label] = elem
+                self._vertex_properties[label] = elem
 
     def config_from_file(self, filename):
         """
@@ -173,3 +172,8 @@ class Hobgoblin:
 
     async def close(self):
         await self._cluster.close()
+        self._closed = True
+
+    @property
+    def closed(self):
+        return self._closed

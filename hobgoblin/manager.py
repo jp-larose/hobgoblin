@@ -1,14 +1,21 @@
 """Managers for multi cardinality vertex properties"""
 from __future__ import annotations
-from typing import Any, Dict
+
+from gremlin_python.process.traversal import Cardinality
+
+from . import typehints as th
+
+# Explicit forward references for type hinting
+DataType = th.ForwardRef('hobgoblin.properties.datatypes.DataType')
+VertexProperty = th.ForwardRef('hobgoblin.element.VertexProperty')
 
 
 class VertexPropertyManager:
-    def __init__(self, data_type, vertex_prop, card):
+    def __init__(self, data_type: DataType, vertex_prop: VertexProperty, card: Cardinality):
         self._data_type = data_type
         self._vertex_prop = vertex_prop
         self._card = card
-        self._mapper_func = vertex_prop.__mapping__.mapper_func
+        self._mapper_func = vertex_prop.metadata.map_fn
 
     @property
     def mapper_func(self):
@@ -24,6 +31,10 @@ class VertexPropertyManager:
         elif not results:
             results = None
         return results
+
+    @property
+    def vertex_property(self):
+        return self._vertex_prop
 
 
 class ListVertexPropertyManager(list, VertexPropertyManager):

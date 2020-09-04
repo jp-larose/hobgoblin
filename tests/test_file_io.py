@@ -4,17 +4,18 @@ from hobgoblin.fileio.graphson import dump, dumps, AdjList
 import tempfile
 
 
-# def test_dump_simple_vertex(person):
-#     person.id = 1
-#     person.name = 'dave'
-#     person.age = 37
-#     person.birthplace = 'Iowa City'
-#     # import ipdb; ipdb.set_trace()
-#     person.nicknames = ['davebshow', 'crustee']
-#     person.location = 'London, ON'
-#     person.location('London, ON').year = 2010
-#     dumped = dumps(person)
-#     print(dumped)
+def test_dump_simple_vertex(person):
+    person.id = 1
+    person.name = 'dave'
+    person.age = 37
+    person.birthplace = 'Iowa City'
+    # import ipdb; ipdb.set_trace()
+    person.nicknames = ['davebshow', 'crustee']
+    person.location = 'London, ON'
+    person.location('London, ON').year = 2010
+    adj_list = AdjList(vertex=person, inE=[], outE=[])
+    dumped = dumps(adj_list)
+    print(dumped)
 
 
 def test_dumps(person_class, knows_class):

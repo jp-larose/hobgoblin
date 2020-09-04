@@ -19,3 +19,11 @@ class TestRegisterEdge2(element.Edge):
 
 class NotAModelShouldNotBeRegistered:
     pass
+
+
+class TestRegisterVertexProperty1(element.VertexProperty):
+    pass
+
+
+class TestRegisterVertexProperty2(element.VertexProperty):
+    pass

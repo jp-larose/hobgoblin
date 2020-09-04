@@ -1,21 +1,19 @@
 """Module defining graph elements."""
 from __future__ import annotations
-from typing import Optional, MutableMapping
 
-import logging
 from autologging import traced, logged
-
 from gremlin_python.process.traversal import Cardinality
 
-from . import meta
-from .properties import datatypes, BaseProperty, Property, IdProperty, PropertyDescriptor
-
-logger = logging.getLogger(__name__)
+import hobgoblin._log_config  # noqa F401  pylint: disable=unused-import
+from . import exception
+from .mapper import map_vertex_property_to_ogm, map_edge_to_ogm, map_vertex_to_ogm, Mapping
+from .meta import ElementMeta, ElementPropertyMeta, Metadata
+from . import typehints as th
+from .properties import datatypes, BaseProperty, Property, IdProperty, PropertyDescriptor, default_db_name_factory, DBNameFactory
 
 
 @traced
-@logged
-class Element(metaclass=meta.ElementMeta):
+class Element(metaclass=ElementMeta):
     """Base class for classes that implement the Element property interface"""
 
     def __init__(self, **kwargs):
@@ -23,104 +21,106 @@ class Element(metaclass=meta.ElementMeta):
             if not (hasattr(self, key) and isinstance(
                     getattr(self, key), PropertyDescriptor)):
                 raise AssertionError(
-                    "No such property: {} for element {}".format(
-                        key, self.__class__.__name__))
+                    f"No such property: {key} for element {self.__class__.__name__}")
             setattr(self, key, value)
 
     id = IdProperty(datatypes.Generic)
     dirty = Property(datatypes.String)
 
+    # Allow access to these class properties from instances
+    metadata = property(ElementMeta.metadata.fget)      # type: Metadata
+    mapping = property(ElementMeta.mapping.fget)        # type: Mapping
+    properties = property(ElementMeta.properties.fget)  # type: th.MutableMapping[str, BaseProperty]
+
+    @property
+    def label(self):
+        if hasattr(self, '_label'):
+            return self._label
+        return self.metadata.label
+
     @classmethod
-    def is_edge(cls):
+    def is_edge(cls) -> bool:
         return False
 
     @classmethod
-    def is_vertex(cls):
+    def is_vertex(cls) -> bool:
         return False
 
     @classmethod
-    def is_vertex_property(cls):
+    def is_vertex_property(cls) -> bool:
         return False
 
 
 @traced
-@logged
 class VertexPropertyDescriptor:
     """
     Descriptor that validates user property input and gets/sets properties
     as instance attributes.
     """
 
-    def __init__(self, name, vertex_property):
+    def __init__(self, name: str, vertex_property: VertexProperty):
         self._prop_name = name
         self._name = '_' + name
-        self._vertex_property = vertex_property.__class__
+        self._vp_cls = vertex_property.__class__
         self._data_type = vertex_property.data_type
         self._default = vertex_property.default
         self._cardinality = vertex_property.cardinality
 
     def __get__(self, obj, obj_type):
         if obj is None:
-            return getattr(obj_type.__mapping__, self._prop_name)
+            return getattr(obj_type.mapping, self._prop_name)
         default = self._default
         if default is not None:
 
             default = self._data_type.validate_vertex_prop(
-                default, self._cardinality, self._vertex_property,
+                default, self._cardinality, self._vp_cls,
                 self._data_type)
         return getattr(obj, self._name, default)
 
     def __set__(self, obj, val):
         if val is not None:
             val = self._data_type.validate_vertex_prop(
-                val, self._cardinality, self._vertex_property, self._data_type)
+                val, self._cardinality, self._vp_cls, self._data_type)
         setattr(obj, self._name, val)
 
 
 @traced
 @logged
-class VertexProperty(Element, BaseProperty, metaclass=meta.ElementPropertyMeta, descriptor=VertexPropertyDescriptor):
+class VertexProperty(BaseProperty, Element, metaclass=ElementPropertyMeta,
+                     descriptor=VertexPropertyDescriptor):
     """Base class for user defined vertex properties."""
 
     def __init__(self,
-                 data_type,
+                 data_type: datatypes.DataType = datatypes.Generic,
                  *,
                  default=None,
                  db_name=None,
-                 card=None,
-                 db_name_factory=None,
+                 card: Cardinality = Cardinality.single,
+                 db_name_factory: DBNameFactory = default_db_name_factory,
                  **kwargs):
-        super().__init__(**kwargs)
+        super().__init__(data_type=data_type, db_name=db_name, **kwargs)
 
-        if not db_name_factory:
-            def db_name_factory(_x, _y):
-                pass
-        if isinstance(data_type, type):
-            data_type = data_type()
         self._db_name_factory = db_name_factory
-        self._data_type = data_type
         self._default = default
-        self._db_name = db_name
         self._val = None
-        if card is None:
-            card = Cardinality.single
         self._cardinality = card
+
+    _metadata = Metadata(map_fn=map_vertex_property_to_ogm)
 
     def to_dict(self):
         result = {
-            '_label': self._label,
-            '_type': self._type,
-            '__value__': self._val
+            'label': self._label,
+            'value': self._val
         }
-        for key, value in self.__properties__.items():
+        for key, _ in self.properties.items():
             prop = getattr(self, key, None)
             result[key] = prop
         return result
 
     def from_dict(self, d):
-        d.pop('_label')
-        d.pop('_type')
-        d.pop('__value__')
+        d.pop('label', None)
+        d.pop('type', None)
+        d.pop('value', None)
         for key, value in d.items():
             setattr(self, key, value)
 
@@ -164,12 +164,15 @@ class VertexProperty(Element, BaseProperty, metaclass=meta.ElementPropertyMeta, 
         return True
 
 
+@traced
 class Vertex(Element):
     """Base class for user defined Vertex classes"""
 
+    _metadata = Metadata(map_fn=map_vertex_to_ogm)
+
     def to_dict(self):
-        result = {'_label': self._label, '_type': self._type}
-        for key, value in self.__properties__.items():
+        result = {'label': self._label, 'type': self._type}
+        for key, _ in self.properties.items():
             vert_prop = getattr(self, key, None)
             if isinstance(vert_prop, (list, set)):
                 vert_prop = [vp.to_dict() for vp in vert_prop]
@@ -179,31 +182,31 @@ class Vertex(Element):
         return result
 
     @classmethod
-    def from_dict(cls, d: MutableMapping):
+    def from_dict(cls, d: th.MutableMapping):
         elem = cls()
-        d.pop('_label')
-        d.pop('_type')
+        d.pop('label')
+        d.pop('type')
         for key, value in d.items():
             if isinstance(value, list):
                 first_prop = value[0]
-                setattr(elem, key, first_prop['__value__'])
+                setattr(elem, key, first_prop['value'])
                 if isinstance(getattr(elem, key), list):
                     getattr(elem, key)[0].from_dict(first_prop)
                     for prop in value[1:]:
-                        getattr(elem, key).append(prop['__value__'])
+                        getattr(elem, key).append(prop['value'])
                         getattr(elem, key)[-1].from_dict(prop)
 
                 elif isinstance(getattr(elem, key), set):
                     getattr(elem,
-                            key)(first_prop['__value__']).from_dict(first_prop)
+                            key)(first_prop['value']).from_dict(first_prop)
                     for prop in value[1:]:
-                        val = prop['__value__']
+                        val = prop['value']
                         getattr(elem, key).add(val)
                         getattr(elem, key)(val).from_dict(prop)
                 else:
                     raise Exception("not a list or set property")
             elif isinstance(value, dict):
-                setattr(elem, key, value['__value__'])
+                setattr(elem, key, value['value'])
                 getattr(elem, key).from_dict(value)
             else:
                 setattr(elem, key, value)
@@ -219,9 +222,9 @@ class GenericVertex(Vertex):
     Class used to build vertices when user defined vertex class is not
     available. Generally not instantiated by end user.
     """
-    pass
 
 
+@traced #('__init__', '__init_subclass__')
 class Edge(Element):
     """
     Base class for user defined Edge classes.
@@ -230,23 +233,30 @@ class Edge(Element):
     :param Vertex target: Target (inV) vertex
     """
 
-    def __init__(self, source: MaybeVertex = None, target: MaybeVertex = None, **kwargs):
-        super().__init__(**kwargs)
-        self.source = source
-        self.target = target
+    _metadata = Metadata(map_fn=map_edge_to_ogm)
 
-    def to_dict(self, source: MaybeVertex = None, target: MaybeVertex = None):
+    @classmethod
+    def __init_subclass__(cls, **_kwargs):
+        for prop in cls.properties.values():
+            if hasattr(prop, 'cardinality'):
+                raise exception.MappingError('Edge property cannot have set/list cardinality')
+
+    def __init__(self, source: OptVertex = None, target: OptVertex = None, **kwargs):
+        super().__init__(**kwargs)
+        self._source = source
+        self._target = target
+
+    def to_dict(self, source: OptVertex = None, target: OptVertex = None):
         if not source:
             source = (self.source or GenericVertex()).to_dict()
         if not target:
             target = (self.target or GenericVertex()).to_dict()
         result = {
-            '_label': self._label,
-            '_type': self._type,
+            'label': self._label,
             'source': source,
             'target': target
         }
-        for key, value in self.__properties__.items():
+        for key, _ in self.properties.items():
             prop = getattr(self, key, None)
             result[key] = prop
         return result
@@ -254,8 +264,7 @@ class Edge(Element):
     @classmethod
     def from_dict(cls, d):
         elem = cls()
-        d.pop('_label')
-        d.pop('_type')
+        d.pop('label')
         for key, value in d.items():
             setattr(elem, key, value)
         return elem
@@ -264,11 +273,13 @@ class Edge(Element):
         return self._source
 
     def set_source(self, vertex):
-        assert isinstance(vertex, Vertex) or vertex is None
+        if not isinstance(vertex, Vertex) and vertex is not None:
+            raise TypeError(f"Source vertex must be an instance of Vertex, "
+                            f"one of its subclasses, or the value None.  Got {vertex}", True)
         self._source = vertex
 
     def del_source(self):
-        del self._source
+        self._source = None
 
     source = property(get_source, set_source, del_source)
 
@@ -276,11 +287,13 @@ class Edge(Element):
         return self._target
 
     def set_target(self, vertex):
-        assert isinstance(vertex, Vertex) or vertex is None
+        if not isinstance(vertex, Vertex) and vertex is not None:
+            raise TypeError(f"Target vertex must be an instance of Vertex, "
+                            f"one of its subclasses, or the value None.  Got {vertex}", True)
         self._target = vertex
 
     def del_target(self):
-        del self._target
+        self._target = None
 
     target = property(get_target, set_target, del_target)
 
@@ -294,10 +307,10 @@ class GenericEdge(Edge):
     Class used to build edges when user defined edges class is not available.
     Generally not instantiated by end user.
     """
-    pass
 
 
 # type hints
-MaybeElement = Optional[Element]
-MaybeVertex = Optional[Vertex]
-MaybeEdge = Optional[Edge]
+OptElement = th.Optional[Element]
+OptVertex = th.Optional[Vertex]
+OptEdge = th.Optional[Edge]
+OptVertexProperty = th.Optional[VertexProperty]
