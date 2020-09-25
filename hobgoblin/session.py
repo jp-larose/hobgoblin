@@ -7,9 +7,10 @@ import collections
 import logging
 # import weakref
 import uuid
+from logging import Logger
 from autologging import logged, traced
 
-from gremlin_python.process.graph_traversal import __, GraphTraversal  # type: ignore
+from gremlin_python.process.graph_traversal import __, GraphTraversal
 from gremlin_python.driver.remote_connection import RemoteTraversal
 from gremlin_python.process.traversal import Binding, Cardinality, Traverser, T
 from gremlin_python.structure import graph
@@ -19,6 +20,7 @@ from aiogremlin.driver.protocol import Message
 from aiogremlin.driver.resultset import ResultSet
 
 from . import exception, mapper
+from . import typehints as th
 from .element import Element, Vertex, Edge, GenericEdge, GenericVertex, VertexProperty
 from .meta import ImmutableMode, LockingMode
 # from .manager import VertexPropertyManager
@@ -57,6 +59,7 @@ class Session:
     :param hobgoblin.app.Hobgoblin app:
     :param aiogremlin.driver.connection.Connection remote_connection:
     """
+    __log: th.ClassVar[Logger]
 
     def __init__(self, app, remote_connection, get_hashable_id):
         self._app = app
@@ -288,7 +291,7 @@ class Session:
                                 drop()
                         ).
                         iterate()
-                    )  # type: ignore
+                    )
                     await self.__rollback_transaction(transaction_id)
         except Exception as e:
             self.__log.error("Encountered exception during flush; Rolling back", exc_info=e)

@@ -26,8 +26,8 @@ class DataType:
 
     @classmethod
     def __init_subclass__(cls, py_type: th.Callable[[th.Any], th.Any], **_kwargs: th.Any):
-        if not py_type or not callable(py_type):
-            raise ValueError("py_type must be a valid callable", py_type)
+        # if not py_type or not callable(py_type):  # mypy: no-warn-unreachable, no-warn-redundant
+        #     raise ValueError("py_type must be a valid callable", py_type)
         cls.py_type = py_type
 
     def __init__(self, val: th.Any = None):

@@ -1,8 +1,7 @@
 """Hobgoblin application class and class constructor"""
 from __future__ import annotations
-from typing import Any
 
-import collections
+from collections import defaultdict
 import importlib
 import logging
 
@@ -40,15 +39,15 @@ class Hobgoblin:
                  *,
                  loop: th.OptLoop = None,
                  provider: th.Type[Provider] = TinkerGraph,  # noqa
-                 get_hashable_id: th.Optional[th.Callable[[Any], Any]] = None,
+                 get_hashable_id: th.Optional[th.Callable[[th.Any], th.Any]] = None,
                  aliases=None):
         util.check_loop_deprecation(loop)
 
         self._cluster = cluster
         self._loop = loop if loop else cluster._loop  # noqa
         self._cluster = cluster
-        self._vertices: th.DefaultDict[str, th.Type[Vertex]] = collections.defaultdict(lambda: GenericVertex)
-        self._edges: th.DefaultDict[str, th.Type[Edge]] = collections.defaultdict(lambda: GenericEdge)
+        self._vertices: th.DefaultDict[str, th.Type[Vertex]] = defaultdict(lambda: GenericVertex)
+        self._edges: th.DefaultDict[str, th.Type[Edge]] = defaultdict(lambda: GenericEdge)
         self._vertex_properties: th.Dict[str, th.Type[VertexProperty]] = {}
         self._provider = provider
         if not get_hashable_id:

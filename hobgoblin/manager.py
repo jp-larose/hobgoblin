@@ -1,16 +1,33 @@
 """Managers for multi cardinality vertex properties"""
 from __future__ import annotations
+from abc import ABC
+from collections.abc import Iterable
 
 from gremlin_python.process.traversal import Cardinality
 
+import hobgoblin  # pylint: disable=unused-import
 from . import typehints as th
 
-# Explicit forward references for type hinting
-DataType = th.ForwardRef('hobgoblin.properties.datatypes.DataType')
-VertexProperty = th.ForwardRef('hobgoblin.element.VertexProperty')
+# # Can't use following import lines because it causes circular imports
+# from .element import VertexProperty
+# from .properties.datatypes import DataType
+
+# # Explicit forward references for type hinting
+# # ============================================
+# # ForwardRef not recognized in mypy
+# DataType = th.ForwardRef('hobgoblin.properties.datatypes.DataType')
+# VertexProperty = th.ForwardRef('hobgoblin.element.VertexProperty')
+#
+# # Setting as string variable doesn't work either.
+# DataType = 'hobgoblin.properties.datatypes.DataType
+# VertexProperty = 'hobgoblin.element.VertexProperty'
+#
+# (Ab)using Union for it's implicit use of ForwardRef
+DataType = th.Union['hobgoblin.properties.datatypes.DataType']
+VertexProperty = th.Union['hobgoblin.element.VertexProperty']
 
 
-class VertexPropertyManager:
+class VertexPropertyManager(Iterable, ABC):
     def __init__(self, data_type: DataType, vertex_prop: VertexProperty, card: Cardinality):
         self._data_type = data_type
         self._vertex_prop = vertex_prop

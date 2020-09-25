@@ -1,13 +1,15 @@
 from __future__ import annotations
 import types
-from dataclasses import dataclass, asdict, MISSING
+from dataclasses import MISSING
 
 from enum import Enum, auto
 from collections import OrderedDict
+from logging import Logger
 
 import inflection
 from autologging import traced, logged
 
+import hobgoblin  # pylint: disable=unused-import
 from .mapper import Mapping, map_element_to_ogm
 from . import typehints as th  # Includes everything from std 'typing' library
 
@@ -24,7 +26,7 @@ class LockingMode(Enum):
 
 
 class AutoNameEnum(Enum):
-    def _generate_next_value_(name, start, count, last_values):
+    def _generate_next_value_(name, start, count, last_values):  # pylint: disable=no-self-argument, unused-argument
         return name
 
 
@@ -39,13 +41,19 @@ DEFAULT = _Sentinel.DEFAULT
 INHERIT = _Sentinel.INHERIT
 REQUIRED = _Sentinel.REQUIRED
 PROVIDED = _Sentinel.PROVIDED
+L_DEFAULT = th.Literal[_Sentinel.DEFAULT]
+L_INHERIT = th.Literal[_Sentinel.INHERIT]
+L_REQUIRED = th.Literal[_Sentinel.REQUIRED]
+L_PROVIDED = th.Literal[_Sentinel.PROVIDED]
+
+T = th.TypeVar('T')
 
 
 def default_label(cls_name):
     return inflection.underscore(cls_name)
 
 
-def _cls_prop(obj_or_cls: th.Any, prop: str):
+def _cls_prop(obj_or_cls: th.Any, prop: str) -> T:
     r_cls = obj_or_cls
     if not hasattr(r_cls, prop) and not isinstance(r_cls, type):
         r_cls = type(obj_or_cls)
@@ -55,15 +63,17 @@ def _cls_prop(obj_or_cls: th.Any, prop: str):
 class WriteOnceDict(dict):
     """This class is a dictionary for which keys can only be assigned a value once.
 
-    Essentially, this means that given `wod = WriteOnlyDict()`, for any given `key`, `wod[key] = something` can only happen once.
+    Essentially, this means that given `wod = WriteOnlyDict()`,
+    for any given `key`, `wod[key] = something` can only happen once.
     However, you can read any number of times."""
     def __setitem__(self, key, value):
         if key in self:
             raise KeyError(f"Key '{key}' already exists in WriteOnceDict, value not replaceable.")
         super().__setitem__(key, value)
 
+    # Disallow deletions
     def __delitem__(self, key):
-        raise NotImplementedError("Deletion not supported in WriteOnceDict.")
+        raise TypeError("Deletions not permitted on WriteOnceDict")
 
     # Allow keys to be accessed as attributes
     def __getattr__(self, item):
@@ -72,16 +82,17 @@ class WriteOnceDict(dict):
     def __setattr__(self, key, value):
         self[key] = value
 
-    def __delattr__(self, item):
-        raise NotImplementedError("Deletion not supported in WriteOnceDict.")
+    # Disallow deletions
+    def __delattr__(self, key):
+        raise TypeError("Deletions not permitted on WriteOnceDict")
 
 
 class Metadata(WriteOnceDict):
     def __init__(self,
-                 label:      th.Union[str, th.Callable[[type], str], th.Literal[REQUIRED]] = DEFAULT,
-                 locking:    th.Union[LockingMode, th.Literal[DEFAULT, INHERIT]]           = INHERIT,
-                 immutable:  th.Union[ImmutableMode, th.Literal[DEFAULT, INHERIT]]         = INHERIT,
-                 map_fn:     th.Union[th.Callable, th.Literal[REQUIRED, INHERIT]]          = INHERIT,
+                 label:      th.Union[str, th.Callable[[type], str], L_REQUIRED, L_DEFAULT] = _Sentinel.DEFAULT,
+                 locking:    th.Union[LockingMode, L_DEFAULT, L_INHERIT]                    = _Sentinel.INHERIT,
+                 immutable:  th.Union[ImmutableMode, L_DEFAULT, L_INHERIT]                  = _Sentinel.INHERIT,
+                 map_fn:     th.Union[th.Callable, L_REQUIRED, L_INHERIT]                   = _Sentinel.INHERIT,
                  **kwargs):
         super().__init__(label=label, locking=locking, immutable=immutable, map_fn=map_fn, **kwargs)
 
@@ -118,12 +129,13 @@ class ElementMeta(type):
     defined :py:class:`hobgoblin.properties.Property` with
     :py:class:`hobgoblin.properties.PropertyDescriptor`.
     """
+    __log: th.ClassVar[Logger]
 
     def __new__(mcs, name: str, bases: th.Bases, namespace: th.IMapStrAny,
                 **kwargs: th.Any):
         mcs.__log.debug([mcs, name, bases, namespace, kwargs])
 
-        new_namespace = {}
+        new_namespace: th.MMapStrAny = {}
 
         props = mcs._collect_props(bases, namespace, new_namespace)
         new_namespace['_properties'] = props
@@ -170,7 +182,7 @@ class ElementMeta(type):
                 # if not val.db_name:
                 #     val.db_name = val.db_name_factory(key, label)
                 if callable(v_type.descriptor):
-                    val = v_type.descriptor(key, val)
+                    val = v_type.descriptor(val, key)
                 else:
                     raise ValueError('descriptor not assigned', val, v_type)
 
@@ -227,18 +239,23 @@ class ElementMeta(type):
         return mapping
 
     # Properties on the classes
+    properties = th.Property[th.Dict[str, 'hobgoblin.properties.BaseProperty']](
+            lambda cls: _cls_prop(cls, '_properties')
+    )
+    metadata = th.Property[Metadata](lambda cls: _cls_prop(cls, '_metadata'))
+    mapping = th.Property[Mapping](lambda cls: _cls_prop(cls, '_mapping'))
 
-    @property
-    def properties(cls) -> th.Dict[str, 'hobgoblin.properties.BaseProperty']:
-        return _cls_prop(cls, '_properties')
-
-    @property
-    def metadata(cls) -> Metadata:
-        return _cls_prop(cls, '_metadata')
-
-    @property
-    def mapping(cls) -> Mapping:
-        return _cls_prop(cls, '_mapping')
+    # @property
+    # def properties(cls) -> th.Dict[str, 'hobgoblin.properties.BaseProperty']:
+    #     return _cls_prop(cls, '_properties')
+    #
+    # @property
+    # def metadata(cls) -> Metadata:
+    #     return _cls_prop(cls, '_metadata')
+    #
+    # @property
+    # def mapping(cls) -> Mapping:
+    #     return _cls_prop(cls, '_mapping')
 
     def __str__(cls):
         return f'<{cls.__name__} Element class>'
@@ -248,6 +265,8 @@ class ElementMeta(type):
 
 # @traced('__new__')
 class PropertyMeta(type):
+    _descriptor: types.GetSetDescriptorType
+
     def __new__(mcs: type, name: str, bases: th.Bases, namespace: th.IMapStrAny,
                 descriptor: types.GetSetDescriptorType = None, **kwargs: th.Any):
 

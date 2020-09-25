@@ -29,7 +29,7 @@ def default_db_name_factory(prop_name: str, owner: th.Any) -> str:      # pylint
 class BaseProperty(metaclass=meta.PropertyMeta):
     """Base class that implements the property interface"""
 
-    def __init__(self, data_type: DataTypeArg, *, db_name: th.OptStr = None):
+    def __init__(self, data_type: DataTypeArg, *, db_name: th.OptStr = None, **_kwargs):
         if data_type:
             if isinstance(data_type, type):
                 data_type = data_type()
@@ -65,7 +65,7 @@ class PropertyDescriptor:
     as instance attributes. Not instantiated by user.
     """
 
-    def __init__(self, name: str, prop: th.Any):
+    def __init__(self, prop: Property, name: str):
         self._prop_name = name
         self._name = '_' + name
         self._data_type = prop.data_type
@@ -126,7 +126,7 @@ class Property(BaseProperty, descriptor=PropertyDescriptor):
 
 @traced
 class IdPropertyDescriptor:
-    def __init__(self, name: str = 'id', prop: th.Any = None):
+    def __init__(self, prop: IdProperty, name: str = 'id'):
         self._data_type = prop.data_type
         self._name = '_' + name
         self._serializer = prop.serializer

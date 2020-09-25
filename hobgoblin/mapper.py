@@ -92,9 +92,11 @@ def map_vertex_to_ogm(result, props, element, *, mapping=None):
             vert_prop = getattr(element, name)
             if hasattr(vert_prop, 'mapper_func'):
                 # Temporary hack for managers
-                vert_prop.mapper_func(metaprops, vert_prop, mapping=vert_prop.vertex_property.mapping)
+                vert_prop.mapper_func(metaprops, vert_prop,
+                                      mapping=vert_prop.vertex_property.mapping)
             else:
-                vert_prop.mapping.mapper_func(metaprops, vert_prop, mapping=vert_prop.mapping)
+                vert_prop.mapping.mapper_func(metaprops, vert_prop,
+                                              mapping=vert_prop.mapping)
     setattr(element, '_label', label)
     setattr(element, 'id', result.id)
     return element

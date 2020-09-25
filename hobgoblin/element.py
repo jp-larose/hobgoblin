@@ -9,7 +9,8 @@ from . import exception
 from .mapper import map_vertex_property_to_ogm, map_edge_to_ogm, map_vertex_to_ogm, Mapping
 from .meta import ElementMeta, ElementPropertyMeta, Metadata
 from . import typehints as th
-from .properties import datatypes, BaseProperty, Property, IdProperty, PropertyDescriptor, default_db_name_factory, DBNameFactory
+from .properties import datatypes, BaseProperty, Property, IdProperty, PropertyDescriptor, \
+    default_db_name_factory, DBNameFactory, DataTypeArg
 
 
 @traced
@@ -28,14 +29,14 @@ class Element(metaclass=ElementMeta):
     dirty = Property(datatypes.String)
 
     # Allow access to these class properties from instances
-    metadata = property(ElementMeta.metadata.fget)      # type: Metadata
-    mapping = property(ElementMeta.mapping.fget)        # type: Mapping
-    properties = property(ElementMeta.properties.fget)  # type: th.MutableMapping[str, BaseProperty]
+    properties = th.Property[th.MutableMapping[str, BaseProperty]](ElementMeta.properties.fget)
+    metadata = th.Property[Metadata](ElementMeta.metadata.fget)
+    mapping = th.Property[Mapping](ElementMeta.mapping.fget)
 
     @property
     def label(self):
         if hasattr(self, '_label'):
-            return self._label
+            return getattr(self, '_label')
         return self.metadata.label
 
     @classmethod
@@ -58,7 +59,7 @@ class VertexPropertyDescriptor:
     as instance attributes.
     """
 
-    def __init__(self, name: str, vertex_property: VertexProperty):
+    def __init__(self, vertex_property: VertexProperty, name: str):
         self._prop_name = name
         self._name = '_' + name
         self._vp_cls = vertex_property.__class__
@@ -91,7 +92,7 @@ class VertexProperty(BaseProperty, Element, metaclass=ElementPropertyMeta,
     """Base class for user defined vertex properties."""
 
     def __init__(self,
-                 data_type: datatypes.DataType = datatypes.Generic,
+                 data_type: DataTypeArg = datatypes.Generic,
                  *,
                  default=None,
                  db_name=None,
@@ -109,7 +110,7 @@ class VertexProperty(BaseProperty, Element, metaclass=ElementPropertyMeta,
 
     def to_dict(self):
         result = {
-            'label': self._label,
+            'label': self.label,
             'value': self._val
         }
         for key, _ in self.properties.items():
@@ -171,7 +172,8 @@ class Vertex(Element):
     _metadata = Metadata(map_fn=map_vertex_to_ogm)
 
     def to_dict(self):
-        result = {'label': self._label, 'type': self._type}
+        # result = {'label': self.label, 'type': self._type}
+        result = { 'label': self.label }
         for key, _ in self.properties.items():
             vert_prop = getattr(self, key, None)
             if isinstance(vert_prop, (list, set)):
@@ -185,7 +187,7 @@ class Vertex(Element):
     def from_dict(cls, d: th.MutableMapping):
         elem = cls()
         d.pop('label')
-        d.pop('type')
+        # d.pop('type')
         for key, value in d.items():
             if isinstance(value, list):
                 first_prop = value[0]
@@ -252,7 +254,7 @@ class Edge(Element):
         if not target:
             target = (self.target or GenericVertex()).to_dict()
         result = {
-            'label': self._label,
+            'label': self.label,
             'source': source,
             'target': target
         }
